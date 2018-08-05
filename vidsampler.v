@@ -37,6 +37,10 @@ always @ (posedge rgb_clk or posedge rst) begin
 		end else begin
 			if (xpos != 8'hFF) begin
 				xpos <= xpos + 1;
+			end else begin
+				//erm wtf
+				xpos <= 0;
+				ypos <= ypos + 1;
 			end
 		end
 	end

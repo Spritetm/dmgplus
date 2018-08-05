@@ -63,7 +63,7 @@
 					<AddressBase>0x00000000</AddressBase>
 					<EndAddress>0x00010000</EndAddress>
 					<DeviceSize>8</DeviceSize>
-					<DataSize>25967</DataSize>
+					<DataSize>28789</DataSize>
 					<NumberOfDevices>1</NumberOfDevices>
 					<ReInitialize value="FALSE"/>
 				</Device>
