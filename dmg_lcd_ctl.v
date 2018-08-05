@@ -1,4 +1,4 @@
-//DMG LCD controller
+//DMG LCD controller, standalone version
 
 module dmg_lcd_ctl (
 	input wire rst,
@@ -13,16 +13,36 @@ module dmg_lcd_ctl (
 	output reg clk,
 	output reg control,
 
-	output wire [7:0] cur_xpos,
-	output wire [7:0] cur_ypos
+	output wire [8:0] xpos_out,
+	output wire [7:0] ypos_out,
+	input wire [1:0] data_in
 );
 
 reg [8:0] xpos;
 reg [7:0] ypos;
 reg int_clk;
+reg next_altsig;
+reg [8:0] next_xpos;
+reg [7:0] next_ypos;
 
 parameter VTOT='d170;
 parameter HTOT='d500;
+
+always @ (*) begin
+	next_altsig <= altsig;
+	if (xpos < HTOT) begin
+		next_xpos <= xpos + 'h1;
+		next_ypos <= ypos;
+	end else begin
+		next_xpos <= 0;
+		if (ypos < VTOT) begin
+			next_ypos <= ypos + 'h1;
+		end else begin
+			next_ypos <= 0;
+			next_altsig <= ~altsig;
+		end
+	end
+end
 
 //Counters
 always @ (posedge clk_8m or posedge rst) begin
@@ -36,17 +56,9 @@ always @ (posedge clk_8m or posedge rst) begin
 			int_clk <= 0;
 		end else begin
 			int_clk <= 1;
-			if (xpos < HTOT) begin
-				xpos <= xpos + 'h1;
-			end else begin
-				xpos <= 0;
-				if (ypos < VTOT) begin
-					ypos <= ypos + 'h1;
-				end else begin
-					ypos <= 0;
-					altsig <= ~altsig;
-				end
-			end
+			ypos <= next_ypos;
+			xpos <= next_xpos;
+			altsig <= next_altsig;
 		end
 	end
 end
@@ -59,6 +71,7 @@ parameter HSYNCCLK='d70;
 parameter HSYNCEND='d78;
 parameter DLATSTART='d485;
 parameter DLATEND='d501;
+
 always @ (*) begin
 	//pixel clock
 	if (ypos < VPIXELEND && (xpos >= HPIXELSTART && xpos < HPIXELEND)) begin
@@ -83,20 +96,15 @@ always @ (*) begin
 	
 	//pixel data
 	if (xpos >= HPIXELSTART && xpos < HPIXELEND && ypos < VPIXELEND) begin
-		if (cur_xpos == cur_ypos) begin
-			d0 <= 1;
-			d1 <= 1;
-		end else begin
-			d0 <= (cur_xpos[4] ^ cur_ypos[4]);
-			d1 <= (cur_xpos[3] ^ cur_ypos[3]);
-		end
+		d0 <= ~data_in[0];
+		d1 <= ~data_in[1];
 	end else begin
 		d0 <= 1;
 		d1 <= 1;
 	end
 end
 
-assign cur_xpos = xpos-HPIXELSTART;
-assign cur_ypos = ypos;
+assign xpos_out = xpos-HPIXELSTART;
+assign ypos_out = ypos;
 
 endmodule

@@ -1,5 +1,5 @@
 #Sources and top module
-SRC := dmgplus.v dmg_lcd_ctl.v
+SRC := dmgplus.v dmg_lcd_ctl.v vram.v vidsampler.v
 LPF := dmgplus.lpf
 VERILOGTOP := dmgplus_top
 
@@ -35,21 +35,21 @@ $(error DIAMOND_DIR is not set. Please make sure it is set (source xenv file?))
 endif
 
 
-VERILOG_SRC=$(addprefix $(CURRENT_DIR)/,$(SRC))
+VERILOG_SRC:=$(addprefix $(CURRENT_DIR)/,$(SRC))
 BUILD_DIR:=$(addprefix $(CURRENT_DIR)/,$(BUILD_DIR))
 LPF:=$(addprefix $(CURRENT_DIR)/, $(LPF))
 
 all: prog_sram
 
 ifeq ($(SYNTYPE),diamond)
-$(BUILD_DIR)/$(IMPL_NAME).ngd: $(VERILOGH_SRC)
+$(BUILD_DIR)/$(IMPL_NAME).ngd: $(SRC)
 	cd $(BUILD_DIR) && synthesis $(SYN_OPTS) -ver $(VERILOG) -top $(VERILOGTOP) -p $(VERILOGSEARCHPATH) -ngd $@
 else
 $(BUILD_DIR)/$(IMPL_NAME)_synplify.tcl: $(VERILOG_SRC) Makefile
 	./gensyntcl.sh -t $(VERILOGTOP) -f $(PART_FAM) -p $(PART_TYPE) -k $(PART_PACKAGE) -s $(PART_SPEED) -o $(BUILD_DIR)/$(IMPL_NAME).edif -l $(BUILD_DIR)/$(IMPL_NAME).log $(VERILOG_SRC) > $@
 
 $(BUILD_DIR)/$(IMPL_NAME).edif: $(BUILD_DIR)/$(IMPL_NAME)_synplify.tcl
-	cd $(BUILD_DIR) && synpwrap -msg -prj "$(BUILD_DIR)/$(IMPL_NAME)_synplify.tcl" -log "$(IMPL_NAME).srf"
+	cd $(BUILD_DIR) && synpwrap -msg -prj "$(BUILD_DIR)/$(IMPL_NAME)_synplify.tcl" -log "$(IMPL_NAME).srf" || ( cat $(IMPL_NAME).srr && false )
 
 $(BUILD_DIR)/$(IMPL_NAME).ngo: $(BUILD_DIR)/$(IMPL_NAME).edif
 	cd $(BUILD_DIR) && edif2ngd -l "$(PART_FAM)" -d $(PART_TYPE) -path "./$(IMPL_NAME)" -path "." "$(IMPL_NAME).edif" "$(IMPL_NAME).ngo"
@@ -92,5 +92,9 @@ program: $(BUILD_DIR)/$(IMPL_NAME).bit
 
 clean:
 	rm -rf $(BUILD_DIR)/*
+
+vram.v:
+	scuba -w -n vram -lang verilog -synth synplify -bus_exp 7 -bb -arch xo3c00f -type ramdps -device $(PART_TYPE) -raddr_width 16 -rwidth 2 -waddr_width 16 -wwidth 2 -rnum_words 65536 -wnum_words 65536 -cascade -1 -mem_init0
+
 
 .PHONY: clean program

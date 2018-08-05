@@ -1,1 +1,6 @@
 build/
+vram.edn
+vram.srp
+vram_tmpl.v
+tb_vram_tmpl.v
+vram.v
