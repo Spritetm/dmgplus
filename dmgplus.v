@@ -20,6 +20,7 @@ module dmgplus_top (
 	input wire rgb_r0,
 	input wire rgb_g0,
 	input wire rgb_g1,
+	input wire rgb_g2,
 	input wire rgb_b0
 );
 
@@ -35,8 +36,8 @@ dmg_lcd_ctl dmg_lcd_ctl_inst (
 	.vsync(lcd_vsync),
 	.altsig(lcd_altsig),
 	.clk(lcd_clk),
-	.d0(lcd_d0),
-	.d1(lcd_d1),
+	.d0(lcd_d1),
+	.d1(lcd_d0),
 	.datal(lcd_datal),
 	.control(lcd_control),
 	.xpos_out(lcd_xpos),
@@ -44,9 +45,12 @@ dmg_lcd_ctl dmg_lcd_ctl_inst (
 	.data_in(gendata)
 );
 
-wire [1:0] rgb_data;
-assign rgb_data[0] = rgb_g0;
-assign rgb_data[1] = rgb_r0;
+wire [3:0] rgb_data;
+//assign rgb_data = (rgb_g0?3'd4:0)|(rgb_g1?3'd2:0)|(rgb_r0?3'd1:0)|(rgb_b0?3'd1:0);
+assign rgb_data[3]=(rgb_g0);
+assign rgb_data[2]=(rgb_g1);
+assign rgb_data[1]=(rgb_g2);
+assign rgb_data[0]=(rgb_r0)|(rgb_b0);
 
 wire [15:0] vram_rd_ad;
 wire [15:0] vram_wr_ad;
@@ -66,7 +70,8 @@ vidsampler vidsampler_inst (
 	.vramclk(vram_w_clk),
 	.vramaddr(vram_wr_ad),
 	.vramdata(vidsampler_data),
-	.vramwe(vram_we)
+	.vramwe(vram_we),
+	.do_dither(dipsw[2])
 );
 
 vram vram_inst (
@@ -93,7 +98,7 @@ always @* begin
 	end else if (dipsw[1:0] == 2'd1) begin
 		vram_w_data = 2'b11;
 	end else if (dipsw[1:0] == 2'd2) begin
-		vram_w_data = 2'b00;
+		vram_w_data = vram_wr_ad[5:4];
 	end else if (dipsw[1:0] == 2'd3) begin
 		vram_w_data = vram_wr_ad[12:11]^vram_wr_ad[4:3];
 	end

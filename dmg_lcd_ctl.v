@@ -72,6 +72,11 @@ parameter HSYNCEND='d78;
 parameter DLATSTART='d485;
 parameter DLATEND='d501;
 
+reg [1:0] data_in_smp;
+always @(posedge clk) begin
+	data_in_smp <= data_in;
+end
+
 always @ (*) begin
 	//pixel clock
 	if (ypos < VPIXELEND && (xpos >= HPIXELSTART && xpos < HPIXELEND)) begin
@@ -96,8 +101,8 @@ always @ (*) begin
 	
 	//pixel data
 	if (xpos >= HPIXELSTART && xpos < HPIXELEND && ypos < VPIXELEND) begin
-		d0 <= ~data_in[0];
-		d1 <= ~data_in[1];
+		d0 <= ~data_in_smp[0];
+		d1 <= ~data_in_smp[1];
 	end else begin
 		d0 <= 1;
 		d1 <= 1;
