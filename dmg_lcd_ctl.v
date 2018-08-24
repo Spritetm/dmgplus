@@ -44,6 +44,27 @@ always @ (*) begin
 	end
 end
 
+output reg d0_c,
+output reg d1_c,
+output reg hsync_c,
+output reg vsync_c,
+output reg datal_c,
+output reg altsig_c,
+output reg clk_c,
+output reg control_c,
+
+always @ (posedge clk_8m) begin
+	do <= d0_c;
+	d1 <= d1_c;
+	hsync <= hsync_c;
+	vsync <= vsync_c;
+	datal <= datal_c;
+	altsig <= altsig_c;
+	clk <= clk_c;
+	control <= control_c;
+end
+
+
 //Counters
 always @ (posedge clk_8m or posedge rst) begin
 	if (rst) begin 
@@ -81,39 +102,39 @@ end
 always @ (*) begin
 	//pixel clock
 	if (ypos < VPIXELEND && (xpos >= HPIXELSTART && xpos < HPIXELEND)) begin
-		clk <= int_clk; 
+		clk_c <= int_clk; 
 	end else if (xpos==HSYNCCLK || xpos==HSYNCCLK+1) begin
-		clk <= 1;
+		clk_c <= 1;
 	end else begin
-		clk <= 0;
+		clk_c <= 0;
 	end
 	//hsync
-	if (xpos >= HSYNCSTART && xpos < HSYNCEND) hsync <= 1; else hsync <= 0;
+	if (xpos >= HSYNCSTART && xpos < HSYNCEND) hsync_c <= 1; else hsync_c <= 0;
 	//vsync signal enable for first line
-	vsync <= 0;
-	if (ypos == 0 && xpos>VSYNCOFF) vsync <= 1;
-	if (ypos == 1 && xpos<=VSYNCOFF) vsync <= 1;
+	vsync_c <= 0;
+	if (ypos == 0 && xpos>VSYNCOFF) vsync_c <= 1;
+	if (ypos == 1 && xpos<=VSYNCOFF) vsync_c <= 1;
 	//control output... it's complicated
 	if (xpos < 'd10 ||
 		(xpos > 'd30 && xpos < 'd35) || 
 		(xpos > 'd180 && xpos < 'd185) ||
 		(xpos > 'd320 && xpos < 'd326) ||
-		xpos >= DLATSTART) control <= 1; else control <= 0;
+		xpos >= DLATSTART) control <= 1; else control_c <= 0;
 	//data latch
-	if (xpos >= DLATSTART && xpos < DLATEND) datal <= 1; else datal <= 0;
+	if (xpos >= DLATSTART && xpos < DLATEND) datal_c <= 1; else datal_c <= 0;
 	
 	//pixel data
 	if (xpos >= HPIXELSTART && xpos < HPIXELEND && ypos < VPIXELEND) begin
-		d0 <= ~data_in_smp[0];
-		d1 <= ~data_in_smp[1];
+		d0_c <= ~data_in_smp[0];
+		d1_c <= ~data_in_smp[1];
 	end else begin
-		d0 <= 0;
-		d1 <= 0;
+		d0_c <= 0;
+		d1_c <= 0;
 	end
 end
 
 assign xpos_out = xpos-HPIXELSTART;
 assign ypos_out = ypos;
-assign altsig = ypos[0] ^ is_even_frame;
+assign altsig_c = ypos[0] ^ is_even_frame;
 
 endmodule
