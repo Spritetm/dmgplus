@@ -25,8 +25,20 @@ reg [8:0] next_xpos;
 reg [7:0] next_ypos;
 reg is_even_frame, next_is_even_frame;
 
-parameter VTOT='d170;
-parameter HTOT='d500;
+//Note: Clock is 8MHz, int_clk is 4MHz, meaning a cycle time of 0.25uS.
+
+parameter VFPORCH='d10; //lines from inversion of altline to vsync / pixels start
+parameter VTOT='d143+VFPORCH; //total amount of lines
+parameter VPIXELEND='d160;
+parameter HTOT='d435; //total time in one line, in clk cycles
+parameter HPIXELSTART='d88; //start of pixel output, in clks
+parameter HPIXELEND=HPIXELSTART+'d160; //end of pixel output, in clks
+parameter HSYNCSTART='d73;
+parameter HSYNCCLK='d80; //pos of single clk pulse during hsync
+parameter HSYNCEND='d87;
+parameter DLATSTART='d430;
+parameter DLATEND='d434; //1uS
+parameter VSYNCOFF='d2;
 
 always @ (*) begin
 	next_is_even_frame <= is_even_frame;
@@ -44,14 +56,14 @@ always @ (*) begin
 	end
 end
 
-output reg d0_c,
-output reg d1_c,
-output reg hsync_c,
-output reg vsync_c,
-output reg datal_c,
-output reg altsig_c,
-output reg clk_c,
-output reg control_c,
+reg d0_c;
+reg d1_c;
+reg hsync_c;
+reg vsync_c;
+reg datal_c;
+reg altsig_c;
+reg clk_c;
+reg control_c;
 
 always @ (posedge clk_8m) begin
 	do <= d0_c;
@@ -64,6 +76,8 @@ always @ (posedge clk_8m) begin
 	control <= control_c;
 end
 
+
+//Note: Clock is 8MHz, int_clk is 4MHz, meaning a cycle time of 0.25uS.
 
 //Counters
 always @ (posedge clk_8m or posedge rst) begin
@@ -84,16 +98,6 @@ always @ (posedge clk_8m or posedge rst) begin
 	end
 end
 
-parameter HPIXELSTART='d80;
-parameter HPIXELEND='d240;
-parameter VPIXELEND='d160;
-parameter HSYNCSTART='d62;
-parameter HSYNCCLK='d70;
-parameter HSYNCEND='d78;
-parameter DLATSTART='d485;
-parameter DLATEND='d486;
-parameter VSYNCOFF='d4;
-
 reg [1:0] data_in_smp;
 always @(posedge clk) begin
 	data_in_smp <= data_in;
@@ -101,32 +105,40 @@ end
 
 always @ (*) begin
 	//pixel clock
-	if (ypos < VPIXELEND && (xpos >= HPIXELSTART && xpos < HPIXELEND)) begin
+	if (ypos < VFPORCH) begin
+		clk_c <= 0; //no pixels here
+	end else if (ypos < VPIXELEND && (xpos >= HPIXELSTART && xpos < HPIXELEND)) begin
 		clk_c <= int_clk; 
-	end else if (xpos==HSYNCCLK || xpos==HSYNCCLK+1) begin
-		clk_c <= 1;
+	end else if (xpos==HSYNCCLK) begin
+		clk_c <= int_clk;
 	end else begin
 		clk_c <= 0;
 	end
 	//hsync
-	if (xpos >= HSYNCSTART && xpos < HSYNCEND) hsync_c <= 1; else hsync_c <= 0;
+	if (ypos >= VFPORCH && xpos >= HSYNCSTART && xpos < HSYNCEND) begin
+		hsync_c <= 1; 
+	end else begin
+		hsync_c <= 0;
+	end
 	//vsync signal enable for first line
 	vsync_c <= 0;
-	if (ypos == 0 && xpos>VSYNCOFF) vsync_c <= 1;
-	if (ypos == 1 && xpos<=VSYNCOFF) vsync_c <= 1;
+	if (ypos == VFPORCH && xpos>=VSYNCOFF) vsync_c <= 1;
+	if (ypos == VFPORCH+1 && xpos<VSYNCOFF) vsync_c <= 1;
 	//control output... it's complicated
-	if (xpos < 'd10 ||
-		(xpos > 'd30 && xpos < 'd35) || 
-		(xpos > 'd180 && xpos < 'd185) ||
-		(xpos > 'd320 && xpos < 'd326) ||
-		xpos >= DLATSTART) control <= 1; else control_c <= 0;
+	if (xpos < 'd4 ||
+		(xpos >= 'd26 && xpos < 'd30) || 
+		(xpos >= 'd171 && xpos < 'd175) ||
+		(xpos >= 'd317 && xpos < 'd320) ||
+		xpos >= DLATSTART) control_c <= 1; else control_c <= 0;
 	//data latch
 	if (xpos >= DLATSTART && xpos < DLATEND) datal_c <= 1; else datal_c <= 0;
 	
 	//pixel data
-	if (xpos >= HPIXELSTART && xpos < HPIXELEND && ypos < VPIXELEND) begin
-		d0_c <= ~data_in_smp[0];
-		d1_c <= ~data_in_smp[1];
+	if (ypos >= VFPORCH && xpos >= HPIXELSTART && xpos < HPIXELEND && ypos < VPIXELEND) begin
+//		d0_c <= ~data_in_smp[0];
+//		d1_c <= ~data_in_smp[1];
+		d1_c <= xpos[4]^ypos[4];
+		d0_c <= xpos[3]^ypos[3];
 	end else begin
 		d0_c <= 0;
 		d1_c <= 0;
@@ -134,7 +146,7 @@ always @ (*) begin
 end
 
 assign xpos_out = xpos-HPIXELSTART;
-assign ypos_out = ypos;
+assign ypos_out = ypos-VFPORCH;
 assign altsig_c = ypos[0] ^ is_even_frame;
 
 endmodule
