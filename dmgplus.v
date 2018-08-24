@@ -1,43 +1,82 @@
 module dmgplus_top (
-	input wire clk_12m,
-	input wire rstn,
-	input wire [3:0] dipsw,
-	output wire [7:0] led,
-
 	output wire lcd_hsync,
 	output wire lcd_vsync,
 	output wire lcd_altsig,
 	output wire lcd_clk,
-	output wire lcd_d0,
-	output wire lcd_d1,
+	output wire [1:0] lcd_d,
 	output wire lcd_datal,
 	output wire lcd_control,
+	
+	input wire rpi_dataen,
+	input wire rpi_pclk,
+	input wire rpi_vsync,
+	input wire [1:0] rpi_r,
+	input wire [2:0] rpi_g,
+	input wire [1:0] rpi_b,
+	
+	output wire [15:0] cart_a,
+	inout wire [7:0] cart_d,
+	input wire cart_nrst,
+	output wire cart_ncs,
+	output wire cart_nrd,
+	output wire cart_nwr,
+	output wire cart_clk,
+	output wire cart_busdir,
 
-	input wire rgb_de,
-	input wire rgb_clk,
-	input wire rgb_hsync,
-	input wire rgb_vsync,
-	input wire rgb_r0,
-	input wire rgb_g0,
-	input wire rgb_g1,
-	input wire rgb_g2,
-	input wire rgb_b0
+	inout wire lp_clk,
+	inout wire lp_gp,
+	input wire lp_din,
+	output wire lp_dout
 );
 
+wire clk_8m;
+wire clk_60m;
+wire pll_locked;
+
+//Flipping heck, the ICE40HX has no internal oscillator, and the design doesn't have an external one.
+//Hack up a ring osc to do the job for now.
+wire [69:0] buffers_in, buffers_out;
+assign buffers_in = {buffers_out[68:0], chain_in};
+assign chain_out = buffers_out[69];
+assign chain_in = !chain_out;
+SB_LUT4 #(
+	.LUT_INIT(16'd2)
+) buffers [69:0] (
+	.O(buffers_out),
+	.I0(buffers_in),
+	.I1(1'b0),
+	.I2(1'b0),
+	.I3(1'b0)
+);
+assign clk_8m = chain_out;
+assign cart_clk = clk_8m;
+
+/*
+pll pllinst (
+	.clock_in(clk_8m),
+	.clock_out(clk_60m),
+	.locked(pll_locked)
+);
+*/
+
 wire rst;
+
+
+assign rst = 0;//! pll_locked; //keep unit in reset until pll is locked
+
 wire [8:0] lcd_xpos;
 wire [7:0] lcd_ypos;
 wire [1:0] gendata;
 
 dmg_lcd_ctl dmg_lcd_ctl_inst (
-	.clk_8m(clk_12m),
+	.clk_8m(clk_8m),
 	.rst(rst),
 	.hsync(lcd_hsync),
 	.vsync(lcd_vsync),
 	.altsig(lcd_altsig),
 	.clk(lcd_clk),
-	.d0(lcd_d1),
-	.d1(lcd_d0),
+	.d0(lcd_d[0]),
+	.d1(lcd_d[1]),
 	.datal(lcd_datal),
 	.control(lcd_control),
 	.xpos_out(lcd_xpos),
@@ -45,16 +84,16 @@ dmg_lcd_ctl dmg_lcd_ctl_inst (
 	.data_in(gendata)
 );
 
-wire [3:0] rgb_data;
+wire [3:0] rpi_data;
 //assign rgb_data = (rgb_g0?3'd4:0)|(rgb_g1?3'd2:0)|(rgb_r0?3'd1:0)|(rgb_b0?3'd1:0);
-assign rgb_data[3]=(rgb_g0);
-assign rgb_data[2]=(rgb_g1);
-assign rgb_data[1]=(rgb_g2);
-assign rgb_data[0]=(rgb_r0)|(rgb_b0);
+assign rpi_data[3]=(rpi_g[2]);
+assign rpi_data[2]=(rpi_g[1]);
+assign rpi_data[1]=(rpi_g[0]);
+assign rpi_data[0]=(rpi_r[1])|(rpi_b[1]);
+
 
 wire [15:0] vram_rd_ad;
 wire [15:0] vram_wr_ad;
-
 wire vram_w_clk;
 wire vram_we;
 reg [1:0] vram_w_data;
@@ -62,11 +101,10 @@ wire [1:0] vidsampler_data;
 
 vidsampler vidsampler_inst (
 	.rst(rst),
-	.rgb_clk(rgb_clk),
-	.rgb_de(rgb_de),
-	.rgb_vsync(rgb_vsync),
-//	.rgb_hsync(rgb_hsync),
-	.rgb_data(rgb_data),
+	.rgb_clk(rpi_clk),
+	.rgb_de(rpi_de),
+	.rgb_vsync(rpi_vsync),
+	.rgb_data(rpi_data),
 	.vramclk(vram_w_clk),
 	.vramaddr(vram_wr_ad),
 	.vramdata(vidsampler_data),
@@ -82,27 +120,15 @@ vram vram_inst (
 	.WrClockEn(1'b1),
 	.RdAddress(vram_rd_ad),
 	.Q(gendata),
-	.RdClock(clk_12m),
+	.RdClock(clk_8m),
 	.RdClockEn(1'b1),
 	.Reset(rst)
 );
 
-assign rst = ~rstn;
-assign led = ~vram_wr_ad[15:8];
 assign vram_rd_ad[15:8] = lcd_ypos;
 assign vram_rd_ad[7:0] = lcd_xpos;
 
-always @* begin
-	if (dipsw[1:0] == 2'd0) begin
-		vram_w_data = vidsampler_data;
-	end else if (dipsw[1:0] == 2'd1) begin
-		vram_w_data = 2'b11;
-	end else if (dipsw[1:0] == 2'd2) begin
-		vram_w_data = vram_wr_ad[5:4];
-	end else if (dipsw[1:0] == 2'd3) begin
-		vram_w_data = vram_wr_ad[12:11]^vram_wr_ad[4:3];
-	end
-end
-
+//assign gendata = lcd_xpos[4:3] ^ lcd_ypos[4:3];
+assign vram_w_data = vidsampler_data;
 
 endmodule

@@ -21,15 +21,15 @@ module dmg_lcd_ctl (
 reg [8:0] xpos;
 reg [7:0] ypos;
 reg int_clk;
-reg next_altsig;
 reg [8:0] next_xpos;
 reg [7:0] next_ypos;
+reg is_even_frame, next_is_even_frame;
 
 parameter VTOT='d170;
 parameter HTOT='d500;
 
 always @ (*) begin
-	next_altsig <= altsig;
+	next_is_even_frame <= is_even_frame;
 	if (xpos < HTOT) begin
 		next_xpos <= xpos + 'h1;
 		next_ypos <= ypos;
@@ -39,7 +39,7 @@ always @ (*) begin
 			next_ypos <= ypos + 'h1;
 		end else begin
 			next_ypos <= 0;
-			next_altsig <= ~altsig;
+			next_is_even_frame <= ~is_even_frame;
 		end
 	end
 end
@@ -50,7 +50,7 @@ always @ (posedge clk_8m or posedge rst) begin
 		xpos <= 'h0;
 		ypos <= 'h0;
 		int_clk <= 0;
-		altsig <= 0;
+		is_even_frame <= 0;
 	end else begin
 		if (int_clk) begin
 			int_clk <= 0;
@@ -58,7 +58,7 @@ always @ (posedge clk_8m or posedge rst) begin
 			int_clk <= 1;
 			ypos <= next_ypos;
 			xpos <= next_xpos;
-			altsig <= next_altsig;
+			is_even_frame <= next_is_even_frame;
 		end
 	end
 end
@@ -70,7 +70,8 @@ parameter HSYNCSTART='d62;
 parameter HSYNCCLK='d70;
 parameter HSYNCEND='d78;
 parameter DLATSTART='d485;
-parameter DLATEND='d501;
+parameter DLATEND='d486;
+parameter VSYNCOFF='d4;
 
 reg [1:0] data_in_smp;
 always @(posedge clk) begin
@@ -89,7 +90,9 @@ always @ (*) begin
 	//hsync
 	if (xpos >= HSYNCSTART && xpos < HSYNCEND) hsync <= 1; else hsync <= 0;
 	//vsync signal enable for first line
-	if (ypos == 0) vsync <= 1; else vsync <= 0;
+	vsync <= 0;
+	if (ypos == 0 && xpos>VSYNCOFF) vsync <= 1;
+	if (ypos == 1 && xpos<=VSYNCOFF) vsync <= 1;
 	//control output... it's complicated
 	if (xpos < 'd10 ||
 		(xpos > 'd30 && xpos < 'd35) || 
@@ -104,12 +107,13 @@ always @ (*) begin
 		d0 <= ~data_in_smp[0];
 		d1 <= ~data_in_smp[1];
 	end else begin
-		d0 <= 1;
-		d1 <= 1;
+		d0 <= 0;
+		d1 <= 0;
 	end
 end
 
 assign xpos_out = xpos-HPIXELSTART;
 assign ypos_out = ypos;
+assign altsig = ypos[0] ^ is_even_frame;
 
 endmodule

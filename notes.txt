@@ -1,0 +1,11 @@
+minibian-wifi:
+https://sourceforge.net/projects/minibianwifi/files/latest/download
+
+ZIF-socket: 21 pin, 1.25mm pitch
+
+Nintendo start: 6 seconds-ish. STM32?
+
+http://gbdev.gg8.se/forums/viewtopic.php?pid=331
+
+flashrom:
+make CONFIG_ENABLE_LIBPCI_PROGRAMMERS=no CONFIG_ENABLE_LIBUSB0_PROGRAMMERS=no CONFIG_ENABLE_LIBUSB1_PROGRAMMERS=no install
