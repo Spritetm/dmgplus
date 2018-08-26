@@ -62,6 +62,7 @@ wire [7:0] lcd_ypos;
 wire [1:0] vram_gendata;
 wire [1:0] startupscreen_gendata;
 wire[1:0] gendata;
+wire newframe;
 
 dmg_lcd_ctl dmg_lcd_ctl_inst (
 	.clk_8m(clk_8m),
@@ -76,7 +77,8 @@ dmg_lcd_ctl dmg_lcd_ctl_inst (
 	.control(lcd_control),
 	.xpos_out(lcd_xpos),
 	.ypos_out(lcd_ypos),
-	.data_in(gendata)
+	.data_in(gendata),
+	.newframe(newframe)
 );
 
 wire [3:0] rpi_data;
@@ -151,6 +153,7 @@ startupscreen_gen startupscreen_inst (
 	.lcd_xpos(lcd_xpos),
 	.lcd_ypos(lcd_ypos),
 	.lcd_data(startupscreen_gendata),
+	.lcd_newframe(newframe),
 
 	.rom_addr(ssgen_rom_a),
 	.rom_data(rom_d),

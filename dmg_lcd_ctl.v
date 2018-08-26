@@ -15,7 +15,9 @@ module dmg_lcd_ctl (
 
 	output wire [8:0] xpos_out,
 	output wire [7:0] ypos_out,
-	input wire [1:0] data_in
+	input wire [1:0] data_in,
+
+	output wire newframe
 );
 
 reg [8:0] xpos;
@@ -24,6 +26,7 @@ reg int_clk;
 reg [8:0] next_xpos;
 reg [7:0] next_ypos;
 reg is_even_frame, next_is_even_frame;
+wire newframe_com;
 
 //Note: Clock is 8MHz, int_clk is 4MHz, meaning a cycle time of 0.25uS.
 
@@ -42,6 +45,7 @@ parameter VSYNCOFF='d2;
 
 always @ (*) begin
 	next_is_even_frame <= is_even_frame;
+	newframe_com <= 0;
 	if (xpos < HTOT) begin
 		next_xpos <= xpos + 'h1;
 		next_ypos <= ypos;
@@ -52,6 +56,7 @@ always @ (*) begin
 		end else begin
 			next_ypos <= 0;
 			next_is_even_frame <= ~is_even_frame;
+			newframe_com <= 1;
 		end
 	end
 end
@@ -64,6 +69,7 @@ reg datal_c;
 reg altsig_c;
 reg clk_c;
 reg control_c;
+reg newframe_com_old;
 
 always @ (posedge clk_8m) begin
 	d0 <= d0_c;
@@ -74,8 +80,11 @@ always @ (posedge clk_8m) begin
 	altsig <= altsig_c;
 	clk <= clk_c;
 	control <= control_c;
+	newframe_com_old <= newframe_com;
 end
 
+//newframe should be high for exactly one clock cycle when a new frame starts.
+assign newframe = newframe_com & ~newframe_com_old;
 
 //Note: Clock is 8MHz, int_clk is 4MHz, meaning a cycle time of 0.25uS.
 

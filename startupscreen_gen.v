@@ -5,6 +5,7 @@ module startupscreen_gen (
 	input wire [8:0] lcd_xpos,
 	input wire [7:0] lcd_ypos,
 	output wire [1:0] lcd_data,
+	input wire lcd_newframe,
 
 	output wire [15:0] rom_addr,
 	input wire [7:0] rom_data,
@@ -117,8 +118,8 @@ always @(*) begin
 	xpos_in_logo <= lcd_xpos - 24;
 	lcd_data[0] <= ~logo_bit;
 	lcd_data[1] <= ~logo_bit;
-	if (vblanks < 80*8) begin
-		scroll <= vblanks/8;
+	if (vblanks < 80*2) begin
+		scroll <= vblanks/2;
 	end else begin
 		scroll <= 80;
 	end
@@ -128,7 +129,7 @@ always @(posedge clk_8m) begin
 	if (rst) begin
 		vblanks <= 'b0;
 	end else begin
-		if (lcd_xpos==0 && lcd_ypos==0) begin
+		if (lcd_newframe) begin
 			vblanks <= vblanks + 1;
 		end
 		if (xpos_in_logo >= 0 && xpos_in_logo < 48*2 &&
