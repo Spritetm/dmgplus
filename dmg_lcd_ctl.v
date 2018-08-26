@@ -66,7 +66,7 @@ reg clk_c;
 reg control_c;
 
 always @ (posedge clk_8m) begin
-	do <= d0_c;
+	d0 <= d0_c;
 	d1 <= d1_c;
 	hsync <= hsync_c;
 	vsync <= vsync_c;
@@ -129,16 +129,16 @@ always @ (*) begin
 		(xpos >= 'd26 && xpos < 'd30) || 
 		(xpos >= 'd171 && xpos < 'd175) ||
 		(xpos >= 'd317 && xpos < 'd320) ||
-		xpos >= DLATSTART) control_c <= 1; else control_c <= 0;
+		xpos >= DLATEND) control_c <= 1; else control_c <= 0;
 	//data latch
 	if (xpos >= DLATSTART && xpos < DLATEND) datal_c <= 1; else datal_c <= 0;
 	
 	//pixel data
 	if (ypos >= VFPORCH && xpos >= HPIXELSTART && xpos < HPIXELEND && ypos < VPIXELEND) begin
-//		d0_c <= ~data_in_smp[0];
-//		d1_c <= ~data_in_smp[1];
-		d1_c <= xpos[4]^ypos[4];
-		d0_c <= xpos[3]^ypos[3];
+		d0_c <= ~data_in_smp[0];
+		d1_c <= ~data_in_smp[1];
+//		d1_c <= xpos[4]^ypos[4];
+//		d0_c <= xpos[3]^ypos[3];
 	end else begin
 		d0_c <= 0;
 		d1_c <= 0;

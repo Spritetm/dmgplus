@@ -29,13 +29,13 @@ module dmgplus_top (
 	output wire lp_dout
 );
 
+
 wire clk_8m;
-wire clk_60m;
-wire pll_locked;
 
 //Flipping heck, the ICE40HX has no internal oscillator, and the design doesn't have an external one.
 //Hack up a ring osc to do the job for now.
 wire [69:0] buffers_in, buffers_out;
+wire chain_in, chain_out;
 assign buffers_in = {buffers_out[68:0], chain_in};
 assign chain_out = buffers_out[69];
 assign chain_in = !chain_out;
@@ -49,24 +49,19 @@ SB_LUT4 #(
 	.I3(1'b0)
 );
 assign clk_8m = chain_out;
-assign cart_clk = clk_8m;
 
-/*
-pll pllinst (
-	.clock_in(clk_8m),
-	.clock_out(clk_60m),
-	.locked(pll_locked)
-);
-*/
-
+/* simple reset signal generator */
 wire rst;
+reg [3:0] rststate = 0;
+assign rst = !(&rststate);
+always @(posedge clk_8m) rststate <= rststate + rst;
 
-
-assign rst = 0;//! pll_locked; //keep unit in reset until pll is locked
 
 wire [8:0] lcd_xpos;
 wire [7:0] lcd_ypos;
-wire [1:0] gendata;
+wire [1:0] vram_gendata;
+wire [1:0] startupscreen_gendata;
+wire[1:0] gendata;
 
 dmg_lcd_ctl dmg_lcd_ctl_inst (
 	.clk_8m(clk_8m),
@@ -101,15 +96,15 @@ wire [1:0] vidsampler_data;
 
 vidsampler vidsampler_inst (
 	.rst(rst),
-	.rgb_clk(rpi_clk),
-	.rgb_de(rpi_de),
+	.rgb_clk(rpi_pclk),
+	.rgb_de(rpi_dataen),
 	.rgb_vsync(rpi_vsync),
 	.rgb_data(rpi_data),
 	.vramclk(vram_w_clk),
 	.vramaddr(vram_wr_ad),
 	.vramdata(vidsampler_data),
 	.vramwe(vram_we),
-	.do_dither(dipsw[2])
+	.do_dither(1)
 );
 
 vram vram_inst (
@@ -119,16 +114,57 @@ vram vram_inst (
 	.WrClock(vram_w_clk),
 	.WrClockEn(1'b1),
 	.RdAddress(vram_rd_ad),
-	.Q(gendata),
+	.Q(vram_gendata),
 	.RdClock(clk_8m),
 	.RdClockEn(1'b1),
 	.Reset(rst)
 );
 
+wire [15:0] ssgen_rom_a;
+wire [7:0] rom_d;
+wire ssgen_rom_rd;
+wire rom_bsy;
+
+cart_iface cart_iface_impl (
+	.clk_8m(clk_8m),
+	.rst(rst),
+	.dout(rom_d),
+	.din('b0),
+	.addr(ssgen_rom_a),
+	.rd(ssgen_rom_rd),
+	.wr(0),
+	.busy(rom_bsy),
+
+	.cart_a(cart_a),
+	.cart_d(cart_d),
+	.cart_nwr(cart_nwr),
+	.cart_nrd(cart_nrd),
+	.cart_ncs(cart_ncs),
+	.cart_clk(cart_clk),
+	.cart_busdir(cart_busdir)
+);
+
+
+startupscreen_gen startupscreen_inst (
+	.clk_8m(clk_8m),
+	.rst(rst),
+	.lcd_xpos(lcd_xpos),
+	.lcd_ypos(lcd_ypos),
+	.lcd_data(startupscreen_gendata),
+
+	.rom_addr(ssgen_rom_a),
+	.rom_data(rom_d),
+	.rom_rd(ssgen_rom_rd),
+	.rom_bsy(rom_bsy)
+);
+
+
 assign vram_rd_ad[15:8] = lcd_ypos;
 assign vram_rd_ad[7:0] = lcd_xpos;
 
 //assign gendata = lcd_xpos[4:3] ^ lcd_ypos[4:3];
+assign gendata = startupscreen_gendata;
 assign vram_w_data = vidsampler_data;
+//assign vram_w_data = vram_wr_ad[4:3];
 
 endmodule
