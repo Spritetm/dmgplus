@@ -26,7 +26,10 @@ module dmgplus_top (
 	inout wire lp_clk,
 	inout wire lp_gp,
 	input wire lp_din,
-	output wire lp_dout
+	output wire lp_dout,
+
+	output wire pwm_l,
+	output wire pwm_r
 );
 
 
@@ -82,11 +85,10 @@ dmg_lcd_ctl dmg_lcd_ctl_inst (
 );
 
 wire [3:0] rpi_data;
-//assign rgb_data = (rgb_g0?3'd4:0)|(rgb_g1?3'd2:0)|(rgb_r0?3'd1:0)|(rgb_b0?3'd1:0);
-assign rpi_data[3]=(rpi_g[2]);
-assign rpi_data[2]=(rpi_g[1]);
-assign rpi_data[1]=(rpi_g[0]);
-assign rpi_data[0]=(rpi_r[1])|(rpi_b[1]);
+//Mix in 1:0.5:0.25 rate, which is close-ish to the 1:0.5:0.16 rate we need
+//This results in a rgb value of [0..11]. The ditherer in the video sampler will
+//keep this in mind.
+assign rpi_data=rpi_g[2:0]+rpi_r[1:0]+rpi_b[1];
 
 
 wire [15:0] vram_rd_ad;
@@ -147,6 +149,8 @@ cart_iface cart_iface_impl (
 );
 
 
+wire pwm_out;
+wire startup_done;
 startupscreen_gen startupscreen_inst (
 	.clk_8m(clk_8m),
 	.rst(rst),
@@ -158,16 +162,23 @@ startupscreen_gen startupscreen_inst (
 	.rom_addr(ssgen_rom_a),
 	.rom_data(rom_d),
 	.rom_rd(ssgen_rom_rd),
-	.rom_bsy(rom_bsy)
+	.rom_bsy(rom_bsy),
+
+	.pwm_out(pwm_out),
+	.startup_done(startup_done)
 );
 
+assign pwm_l = pwm_out;
+assign pwm_r = pwm_out;
 
 assign vram_rd_ad[15:8] = lcd_ypos;
 assign vram_rd_ad[7:0] = lcd_xpos;
 
 //assign gendata = lcd_xpos[4:3] ^ lcd_ypos[4:3];
-assign gendata = startupscreen_gendata;
+assign gendata = startup_done?vram_gendata:startupscreen_gendata;
 assign vram_w_data = vidsampler_data;
 //assign vram_w_data = vram_wr_ad[4:3];
+
+assign lp_dout = 0;
 
 endmodule

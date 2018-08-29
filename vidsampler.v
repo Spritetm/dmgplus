@@ -15,12 +15,38 @@ module vidsampler (
 reg [7:0] xpos;
 reg [7:0] ypos;
 
-wire [4:0] rgbdithered;
+wire [3:0] rgbdithered;
 wire [1:0] ditherval;
 reg [1:0] frameno;
+//The incoming RGB value is [0..11].
+//We dither by adding a (time and pixel position dependent) value between 0 and 3 to the pixel.
+//This results in a range of [0..14].
 assign ditherval = xpos[1:0] + ypos[1:0] + frameno;
-assign rgbdithered = rgb_data + (ditherval) + 'd2;
-assign vramdata = do_dither ? rgbdithered[4:3] : rgb_data[3:2];
+assign rgbdithered = rgb_data + ditherval;
+
+reg [1:0] dithered;
+always @(*) begin
+	case(rgbdithered) 
+		0: dithered = 0;
+		1: dithered = 0;
+		2: dithered = 0;
+		3: dithered = 0;
+		4: dithered = 1;
+		5: dithered = 1;
+		6: dithered = 1;
+		7: dithered = 1;
+		8: dithered = 2;
+		9: dithered = 2;
+		10: dithered = 2;
+		11: dithered = 3;
+		12: dithered = 3;
+		13: dithered = 3;
+		14: dithered = 3;
+		default: dithered = 3;
+	endcase
+end
+
+assign vramdata = dithered;
 
 assign vramclk = rgb_clk;
 assign vramwe = rgb_de;

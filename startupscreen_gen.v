@@ -10,9 +10,22 @@ module startupscreen_gen (
 	output wire [15:0] rom_addr,
 	input wire [7:0] rom_data,
 	output reg rom_rd,
-	input wire rom_bsy
+	input wire rom_bsy,
+
+	output wire pwm_out,
+	output wire startup_done
 );
 
+
+wire [10:0] sound_freq;
+wire sound_start;
+sndgen sndgen_inst(
+	.clk_8m(clk_8m),
+	.rst(rst),
+	.start_sound(sound_start),
+	.freq(sound_freq),
+	.pwm(pwm_out)
+);
 
 /*
 Logo is stored weirdly on cart... http://i.imgur.com/BikSgOo.png
@@ -20,7 +33,7 @@ We flatten it while reading.
 */
 
 reg logo_data[0:47][0:7];
-reg [9:0] vblanks;
+reg [8:0] vblanks;
 reg [7:0] scroll;
 reg [7:0] rsign[7:0];
 
@@ -112,16 +125,36 @@ end
 reg [7:0] ypos_in_logo;
 reg [7:0] xpos_in_logo;
 reg [7:0] logo_bit;
+wire all_done;
+assign startup_done = all_done;
 
 always @(*) begin
-	ypos_in_logo <= lcd_ypos - scroll + 'd16;
+	ypos_in_logo <= lcd_ypos - scroll + 'd34;
 	xpos_in_logo <= lcd_xpos - 24;
 	lcd_data[0] <= ~logo_bit;
 	lcd_data[1] <= ~logo_bit;
-	if (vblanks < 80*2) begin
+	if (vblanks < 100*2) begin
 		scroll <= vblanks/2;
 	end else begin
-		scroll <= 80;
+		scroll <= 100;
+	end
+end
+
+wire all_done;
+assign all_done = (vblanks == 132*2);
+assign startup_done = all_done;
+
+always @(*) begin
+	sound_start = 0;
+	sound_freq = 0;
+	if (lcd_newframe) begin
+		if (vblanks == 'h62*2) begin
+			sound_start = 1;
+			sound_freq = 'h783;
+		end else if (vblanks == 'h64 * 2) begin
+			sound_start = 1;
+			sound_freq = 'h7c1;
+		end
 	end
 end
 
@@ -129,7 +162,7 @@ always @(posedge clk_8m) begin
 	if (rst) begin
 		vblanks <= 'b0;
 	end else begin
-		if (lcd_newframe) begin
+		if (lcd_newframe && !all_done) begin
 			vblanks <= vblanks + 1;
 		end
 		if (xpos_in_logo >= 0 && xpos_in_logo < 48*2 &&

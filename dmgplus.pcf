@@ -57,3 +57,5 @@ set_io flash_mosi 67
 set_io flash_miso 68
 set_io flash_sck 70
 set_io flash_ncs 71
+set_io pwm_l 101
+set_io pwm_r 102
