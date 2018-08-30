@@ -85,8 +85,6 @@ end
 
 reg need_read_byte;
 
-//ToDo: Something is wrong with the busy signal of the cart iface. Work around it here.
-reg [4:0] stupid_busy_sim;
 
 always @(posedge clk_8m) begin
 	if (rst || vblanks==0) begin
@@ -99,10 +97,9 @@ always @(posedge clk_8m) begin
 		if (logo_wbit==0 && need_read_byte) begin
 			rom_rd <= 1;
 			need_read_byte <= 0;
-			stupid_busy_sim <= 1;
-		end else if (stupid_busy_sim != 0) begin
-			stupid_busy_sim <= stupid_busy_sim+1;
-		end else if (logo_wbit==0 && !need_read_byte && !rom_bsy) begin
+		end else if (rom_bsy) begin
+			//wait
+		end else if (logo_wbit==0 && !need_read_byte) begin
 			logo_rdat <= rom_data;
 			logo_wbit <= 1;
 			logo_data[logow_xpos][logow_ypos] <= rom_data[7];

@@ -39,7 +39,7 @@ reg [15:0] cur_addr;
 assign cart_a = cur_addr;
 assign cart_d_oe = cart_nrd ? 8'hff : 8'h00;
 assign cart_busdir = ~cart_nrd;
-assign busy =  (&cycle) | rd | wr;
+assign busy = (cycle!='b00) | rd | wr;
 
 always @(posedge clk_8m) begin
 	if (rst) begin
