@@ -23,5 +23,10 @@ all:
 burn:
 	iceprog $(BUILD)/$(PROJ).bin
 
+spislave_testbench:
+	iverilog -o spislave_testbench.vvp spislave_testbench.v spislave.v
+	vvp spislave_testbench.vvp
+
+
 clean:
 	rm build/*

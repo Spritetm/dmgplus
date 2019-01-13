@@ -41,6 +41,12 @@ assign cart_d_oe = cart_nrd ? 8'hff : 8'h00;
 assign cart_busdir = ~cart_nrd;
 assign busy = (cycle!='b00) | rd | wr;
 
+/*
+Note: According to https://dhole.github.io/post/gameboy_cartridge_emu_1/ , the GB Z80
+has 1MHz memory cycles. We take a risk here by assuming the memory will also work at
+2MHz.
+*/
+
 always @(posedge clk_8m) begin
 	if (rst) begin
 		cycle <= 0;
@@ -73,13 +79,16 @@ always @(posedge clk_8m) begin
 end
 
 
-//handle cart clock
+//handle cart clock - should be 1MHz (and actually aligned with the bus accesses - I'm not
+//sure if any cart actually cares about those though, so that's not implemented)
+reg cartclk_div[2:0];
 always @(posedge clk_8m) begin
 	if (rst) begin
-		cart_clk <= 0;
+		cartclk_div <= 0;
 	end else begin
-		cart_clk <= ~cart_clk; //4MHz
+		cartclk_div <= cartclk_div + 1;
 	end
 end
+assign cart_clk = cartclk_div[2];
 
 endmodule
