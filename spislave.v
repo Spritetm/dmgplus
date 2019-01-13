@@ -14,7 +14,7 @@ module spislave (
 );
 
 
-reg [3:0] bit_sel;
+reg [2:0] bit_sel;
 reg [7:0] rdata;
 reg [7:0] wdata;
 reg first_byte;
@@ -40,33 +40,38 @@ always @(negedge sck, negedge cs, posedge rst) begin
 		//deselected, abort transaction in progress
 		bit_sel <= 0;
 		curr_firstbyte <= 1;
-		mdata <= 'h00;
-		data_firstbyte <= 0;
+		if (rst == 1) begin
+			data_firstbyte <= 0;
+			mdata <= 'h00;
+		end
 		rdata <= 'h00;
-		wdata <= 'h00;
+		wdata <= sdata;
 		first_byte <= 0;
 		flag_next_toggle <= 0;
 		curr_firstbyte <= 0;
 		flag_next_resamp <= 'b000;
-	end else if (sck == 1) begin
-		//selected, sck went high, output next bit
-		rdata <= {rdata[6:0], mosi};
+	end else if (sck == 0) begin
+		//selected, sck went low, output next bit
+		rdata <= {rdata[6:0], sampled_mosi};
 		wdata <= {wdata[6:0], 1'b0};
 		if (bit_sel == 7) begin
-			mdata <= rdata;
+			mdata <= {rdata[6:0], sampled_mosi};
 			wdata <= sdata;
 			flag_next_toggle <= !flag_next_toggle;
 			data_firstbyte <= curr_firstbyte;
 			curr_firstbyte <= 0;
+			bit_sel <= 0;
+		end else begin
+			bit_sel <= bit_sel+1;
 		end
-		bit_sel <= bit_sel+1;
 	end
 end
 
 always @(posedge clk) begin
 	flag_next_resamp <= { flag_next_resamp[1:0], flag_next_toggle };
 end
-assign data_valid_read = flag_next_resamp[2];
+
+assign data_valid_read = flag_next_resamp[2] ^ flag_next_resamp[1];
 
 
 endmodule
