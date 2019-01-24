@@ -27,6 +27,13 @@ spislave_testbench:
 	iverilog -o spislave_testbench.vvp spislave_testbench.v spislave.v
 	vvp spislave_testbench.vvp
 
+cart_iface_testbench:
+	iverilog -o cart_iface_testbench.vvp cart_iface_testbench.v cart_iface.v sb_io_model.v
+	vvp cart_iface_testbench.vvp
+
+spicart_testbench:
+	iverilog -o spicart_testbench.vvp spicart_testbench.v spislave.v cart_iface.v sb_io_model.v spicart.v
+	vvp spicart_testbench.vvp
 
 clean:
 	rm build/*

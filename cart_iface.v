@@ -14,18 +14,18 @@ module cart_iface (
 	output reg cart_ncs,
 	output reg cart_nrd,
 	output reg cart_nwr,
-	output reg cart_clk,
+	output wire cart_clk,
 	output wire cart_busdir
 );
 
 /* Yosys doesn't do tristate nicely... instantiate it manually for the cart_d lines */
-wire [7:0] cart_d_out;
-reg [7:0] cart_d_in;
+reg [7:0] cart_d_out;
+wire [7:0] cart_d_in;
 wire [7:0] cart_d_oe;
 SB_IO #(
     .PIN_TYPE(6'b 1010_01),
     .PULLUP(1'b 0)
-) cart_d [7:0] (
+) cart_d_tris [7:0] (
     .PACKAGE_PIN(cart_d),
     .OUTPUT_ENABLE(cart_d_oe),
     .D_OUT_0(cart_d_out),
@@ -81,12 +81,12 @@ end
 
 //handle cart clock - should be 1MHz (and actually aligned with the bus accesses - I'm not
 //sure if any cart actually cares about those though, so that's not implemented)
-reg cartclk_div[2:0];
+reg [2:0] cartclk_div;
 always @(posedge clk_8m) begin
 	if (rst) begin
-		cartclk_div <= 0;
+		cartclk_div <= 'h0;
 	end else begin
-		cartclk_div <= cartclk_div + 1;
+		cartclk_div <= cartclk_div + 'h1;
 	end
 end
 assign cart_clk = cartclk_div[2];
