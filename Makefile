@@ -6,7 +6,8 @@ FOOTPRINT = tq144:4k
 PCFFILE   = dmgplus.pcf
 
 # Files
-FILES = dmgplus.v ice40_pll.v dmg_lcd_ctl.v vram.v vidsampler.v startupscreen_gen.v cart_iface.v sndgen.v
+FILES = dmgplus.v ice40_pll.v dmg_lcd_ctl.v vram.v vidsampler.v startupscreen_gen.v cart_iface.v sndgen.v \
+	spicart.v spislave.v
 
 .PHONY: all clean burn
 

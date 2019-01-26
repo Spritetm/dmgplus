@@ -3,14 +3,15 @@
 module stimulus();
 
 reg clk = 0, rst=0;
-reg [7:0] cartif_in;
+wire [7:0] cartif_in;
 wire [7:0] cartif_out;
 wire [15:0] cartif_addr;
 wire cartif_rd, cartif_wr;
 wire cartif_busy;
 
 wire [15:0] cart_a;
-wire [7:0] cart_da;
+wire [7:0] cart_d_out;
+reg [7:0] cart_d_in;
 wire cart_ncs, cart_nwr, cart_clk;
 wire cart_busdir;
 
@@ -29,7 +30,8 @@ cart_iface i_cart_iface(
 	.wr(cartif_wr),
 	.busy(cartif_busy),
 	.cart_a(cart_a),
-	.cart_d(cart_da),
+	.cart_d_in(cart_d_in),
+	.cart_d_out(cart_d_out),
 	.cart_ncs(cart_ncs),
 	.cart_nrd(cart_nrd),
 	.cart_nwr(cart_nwr),
@@ -55,14 +57,12 @@ spicart i_spicart(
 //clock toggle
 always #0.5 clk = !clk;
 
-reg [7:0] cart_d;
-assign cart_da = cart_d;
 
 always @(*) begin
-	if (cart_busdir) begin
-		cart_d = 'hzz;
+	if (!cart_busdir) begin
+		cart_d_in = 'hff;
 	end else begin
-		cart_d = cart_a[7:0];
+		cart_d_in = cart_a[7:0];
 	end
 end
 
@@ -71,22 +71,23 @@ input [7:0] d;
 integer i;
 begin
 	for (i=7; i>=0; --i) begin
-		#0.1 spi_mosi <= d[i];
+		#0.3 spi_mosi <= d[i];
 		spi_sck <= 0;
-		#0.1 spi_sck <= 1;
+		#0.3 spi_sck <= 1;
 	end
-	#0.1 spi_sck <= 1;
+	#0.3 spi_sck <= 0;
 end
 endtask
 
 initial begin
-	$dumpfile("cart_iface_testbench.vcd");
+	$dumpfile("spicart_testbench.vcd");
 	$dumpvars(0, stimulus);
 
 	spi_cs <= 0;
 	spi_mosi <= 0;
 	spi_sck <= 0;
-	rst = 1;
+	rst = 0;
+	#1 rst = 1;
 	#5 rst = 0;
 	#2.5 spi_cs <= 1;
 	spisend('h12);
@@ -96,12 +97,12 @@ initial begin
 	spisend(0);
 	spi_cs <= 0;
 	#2 spi_cs <= 1;
-	spisend('h80);
+	#2 spisend('h80);
 	spisend('h00);
-	spisend(0);
-	spisend(1);
-	spisend(2);
-	spisend(3);
+	spisend('ha0);
+	spisend('ha1);
+	spisend('ha2);
+	spisend('ha3);
 	spi_cs <= 0;
 	
 	

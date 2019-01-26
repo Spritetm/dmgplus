@@ -10,7 +10,8 @@ module cart_iface (
 	output wire busy,
 	
 	output wire [15:0] cart_a,
-	inout wire [7:0] cart_d,
+	input wire [7:0] cart_d_in,
+	output reg [7:0] cart_d_out,
 	output reg cart_ncs,
 	output reg cart_nrd,
 	output reg cart_nwr,
@@ -18,26 +19,9 @@ module cart_iface (
 	output wire cart_busdir
 );
 
-/* Yosys doesn't do tristate nicely... instantiate it manually for the cart_d lines */
-reg [7:0] cart_d_out;
-wire [7:0] cart_d_in;
-wire [7:0] cart_d_oe;
-SB_IO #(
-    .PIN_TYPE(6'b 1010_01),
-    .PULLUP(1'b 0)
-) cart_d_tris [7:0] (
-    .PACKAGE_PIN(cart_d),
-    .OUTPUT_ENABLE(cart_d_oe),
-    .D_OUT_0(cart_d_out),
-    .D_IN_0(cart_d_in)
-);
-
-
-
 reg [1:0] cycle;
 reg [15:0] cur_addr;
 assign cart_a = cur_addr;
-assign cart_d_oe = cart_nrd ? 8'hff : 8'h00;
 assign cart_busdir = ~cart_nrd;
 assign busy = (cycle!='b00) | rd | wr;
 
@@ -53,6 +37,8 @@ always @(posedge clk_8m) begin
 		cart_ncs <= 1;
 		cart_nwr <= 1;
 		cart_nrd <= 1;
+		cart_d_out <= 0;
+		dout <= 'hff;
 	end else begin
 		if (cycle == 0 && (rd || wr)) begin
 			cycle <= 1;

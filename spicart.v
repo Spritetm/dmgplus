@@ -8,8 +8,8 @@ module spicart (
 	input spi_sck,
 	input spi_cs,
 	
-	output [7:0] cart_dout,
-	input [7:0] cart_din,
+	input [7:0] cart_dout,
+	output [7:0] cart_din,
 	output reg [15:0] cart_a,
 	output cart_wr,
 	output cart_rd,
@@ -38,8 +38,8 @@ spislave i_spislave(
 reg[1:0] bytectr;
 reg is_write;
 
-assign cart_dout = data_master; //won't actually write until cart_wr is triggered
-assign data_slave = cart_din;
+assign cart_din = data_master; //won't actually write until cart_wr is triggered
+assign data_slave = cart_dout;
 
 always @(posedge clk) begin
 	if (rst) begin
@@ -59,15 +59,20 @@ always @(posedge clk) begin
 			end else begin
 				if (bytectr == 0) begin
 					cart_a[7:0] <= data_master;
-				end else begin
-					if (is_write) begin
-						cart_wr <= 1;
-					end else begin
-						cart_rd <= 1;
-					end
+				end else if (is_write) begin
+					//need to start to write only after we have the 1st data byte.
+					cart_wr <= 1;
+				end 
+				if (!is_write) begin
+					//but we must start reading _before_ the 1st data byte
+					cart_rd <= 1;
 				end
 				bytectr<=bytectr+1;
 			end
+		end
+		if (cart_wr || cart_rd) begin
+			//prepare for next addr;
+			cart_a <= cart_a + 1;
 		end
 	end
 end

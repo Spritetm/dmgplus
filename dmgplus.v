@@ -28,6 +28,11 @@ module dmgplus_top (
 	input wire lp_din,
 	output wire lp_dout,
 
+	input wire spi_mosi,
+	input wire spi_sck,
+	input wire spi_cs,
+	output wire spi_miso,
+
 	output wire pwm_l,
 	output wire pwm_r
 );
@@ -125,28 +130,75 @@ vram vram_inst (
 );
 
 wire [15:0] ssgen_rom_a;
+wire [15:0] rom_a;
 wire [7:0] rom_d;
+wire [7:0] rom_din;
 wire ssgen_rom_rd;
 wire rom_bsy;
+wire rom_rd, rom_wr;
 
 cart_iface cart_iface_impl (
 	.clk_8m(clk_8m),
 	.rst(rst),
 	.dout(rom_d),
-	.din('b0),
-	.addr(ssgen_rom_a),
-	.rd(ssgen_rom_rd),
-	.wr(0),
+	.din(rom_din),
+	.addr(rom_a),
+	.rd(rom_rd),
+	.wr(rom_wr),
 	.busy(rom_bsy),
 
 	.cart_a(cart_a),
-	.cart_d(cart_d),
+	.cart_d_out(cart_d_out),
+	.cart_d_in(cart_d_in),
 	.cart_nwr(cart_nwr),
 	.cart_nrd(cart_nrd),
 	.cart_ncs(cart_ncs),
 	.cart_clk(cart_clk),
 	.cart_busdir(cart_busdir)
 );
+
+wire [15:0] spicart_rom_a;
+wire spicart_rom_rd, spicart_rom_wr;
+
+spicart spi_cart_impl(
+	.clk(clk_8m),
+	.rst(rst),
+	.spi_mosi(spi_mosi),
+	.spi_miso(spi_miso),
+	.spi_sck(spi_sck),
+	.spi_cs(spi_cs),
+
+	.cart_dout(rom_d),
+	.cart_din(rom_din),
+	.cart_a(spicart_rom_a),
+	.cart_rd(spicart_rom_rd),
+	.cart_wr(spicart_rom_wr),
+	.cart_busy(rom_bsy)
+);
+
+
+/* Yosys doesn't do tristate nicely... instantiate it manually for the cart_d lines */
+reg [7:0] cart_d_out;
+wire [7:0] cart_d_in;
+reg [7:0] cart_d_oe;
+always @(*) begin
+	if (cart_busdir) begin
+		cart_d_oe = 'h00;
+	end else begin
+		cart_d_oe = 'hff;
+	end
+end
+
+SB_IO #(
+    .PIN_TYPE(6'b 1010_01),
+    .PULLUP(1'b 0)
+) cart_d_tris [7:0] (
+    .PACKAGE_PIN(cart_d),
+    .OUTPUT_ENABLE(cart_d_oe),
+    .D_OUT_0(cart_d_out),
+    .D_IN_0(cart_d_in)
+);
+
 
 
 wire pwm_out;
@@ -167,6 +219,19 @@ startupscreen_gen startupscreen_inst (
 	.pwm_out(pwm_out),
 	.startup_done(startup_done)
 );
+
+always @(*) begin
+	if (startup_done) begin
+		rom_rd = spicart_rom_rd;
+		rom_wr = spicart_rom_wr;
+		rom_a = spicart_rom_a;
+	end else begin
+		rom_rd = ssgen_rom_rd;
+		rom_wr = ssgen_rom_wr;
+		rom_a = ssgen_rom_a;
+	end
+end
+
 
 assign pwm_l = pwm_out;
 assign pwm_r = pwm_out;

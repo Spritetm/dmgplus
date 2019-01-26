@@ -10,7 +10,7 @@ module spislave (
 	output reg [7:0] mdata,
 	input wire [7:0] sdata,
 	output wire data_valid_read,
-	output reg data_firstbyte
+	output wire data_firstbyte
 );
 
 
@@ -33,7 +33,9 @@ end
 assign miso = wdata[7];
 
 reg flag_next_toggle;
+reg flag_first_toggle;
 reg [2:0] flag_next_resamp;
+reg [2:0] flag_first_resamp;
 
 always @(negedge sck, negedge cs, posedge rst) begin
 	if (cs == 0 || rst == 1) begin
@@ -41,15 +43,15 @@ always @(negedge sck, negedge cs, posedge rst) begin
 		bit_sel <= 0;
 		curr_firstbyte <= 1;
 		if (rst == 1) begin
-			data_firstbyte <= 0;
 			mdata <= 'h00;
 		end
 		rdata <= 'h00;
 		wdata <= sdata;
 		first_byte <= 0;
 		flag_next_toggle <= 0;
-		curr_firstbyte <= 0;
 		flag_next_resamp <= 'b000;
+		flag_first_toggle <= 0;
+		flag_first_resamp <= 'b000;
 	end else if (sck == 0) begin
 		//selected, sck went low, output next bit
 		rdata <= {rdata[6:0], sampled_mosi};
@@ -58,7 +60,7 @@ always @(negedge sck, negedge cs, posedge rst) begin
 			mdata <= {rdata[6:0], sampled_mosi};
 			wdata <= sdata;
 			flag_next_toggle <= !flag_next_toggle;
-			data_firstbyte <= curr_firstbyte;
+			if (curr_firstbyte) flag_first_toggle <= !flag_first_toggle;
 			curr_firstbyte <= 0;
 			bit_sel <= 0;
 		end else begin
@@ -69,9 +71,11 @@ end
 
 always @(posedge clk) begin
 	flag_next_resamp <= { flag_next_resamp[1:0], flag_next_toggle };
+	flag_first_resamp <= { flag_first_resamp[1:0], flag_first_toggle };
 end
 
 assign data_valid_read = flag_next_resamp[2] ^ flag_next_resamp[1];
+assign data_firstbyte = flag_first_resamp[2] ^ flag_first_resamp[1];
 
 
 endmodule
