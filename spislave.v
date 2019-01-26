@@ -42,9 +42,9 @@ always @(negedge sck, negedge cs, posedge rst) begin
 		//deselected, abort transaction in progress
 		bit_sel <= 0;
 		curr_firstbyte <= 1;
-		if (rst == 1) begin
-			mdata <= 'h00;
-		end
+//		if (rst == 1) begin
+//			mdata <= 'h00;
+//		end
 		rdata <= 'h00;
 		wdata <= sdata;
 		first_byte <= 0;
