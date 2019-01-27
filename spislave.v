@@ -25,7 +25,6 @@ reg curr_firstbyte;
 //Out-data is written on the falling edge of the signal (or CS becoming active), in-data is
 //read on the rising edge.
 
-
 assign miso = wdata[7];
 
 reg flag_next_toggle;
@@ -58,8 +57,6 @@ always @(negedge shift_maybe or posedge rst) begin
 		bit_sel <= 0;
 		flag_next_toggle <= 0;
 		flag_first_toggle <= 0;
-		flag_next_resamp <= 0;
-		flag_first_resamp <= 0;
 		rdata <= 0;
 	end else begin
 		rdata <= {rdata[6:0], sampled_mosi};
@@ -87,8 +84,13 @@ always @(negedge shift_maybe or posedge rst) begin
 end
 
 always @(posedge clk) begin
-	flag_next_resamp <= { flag_next_resamp[1:0], flag_next_toggle };
-	flag_first_resamp <= { flag_first_resamp[1:0], flag_first_toggle };
+	if (rst) begin
+		flag_next_resamp=0;
+		flag_first_resamp=0;
+	end else begin
+		flag_next_resamp <= { flag_next_resamp[1:0], flag_next_toggle };
+		flag_first_resamp <= { flag_first_resamp[1:0], flag_first_toggle };
+	end
 end
 
 assign data_valid_read = flag_next_resamp[2] ^ flag_next_resamp[1];
