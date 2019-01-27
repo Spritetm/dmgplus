@@ -67,7 +67,8 @@ always @(posedge clk) begin
 					//but we must start reading _before_ the 1st data byte
 					cart_rd <= 1;
 				end
-				bytectr<=bytectr+1;
+				//Don't roll over
+				if (bytectr!=3) bytectr<=bytectr+1;
 			end
 		end
 		if (cart_wr || cart_rd) begin
