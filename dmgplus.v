@@ -100,7 +100,7 @@ wire [15:0] vram_rd_ad;
 wire [15:0] vram_wr_ad;
 wire vram_w_clk;
 wire vram_we;
-reg [1:0] vram_w_data;
+wire [1:0] vram_w_data;
 wire [1:0] vidsampler_data;
 
 vidsampler vidsampler_inst (
@@ -130,17 +130,21 @@ vram vram_inst (
 );
 
 wire [15:0] ssgen_rom_a;
+wire [15:0] spicart_rom_a;
 wire [15:0] rom_a;
-wire [7:0] rom_d;
+wire [7:0] rom_dout;
 wire [7:0] rom_din;
 wire ssgen_rom_rd;
+wire spicart_rom_rd, spicart_rom_wr;
 wire rom_bsy;
 wire rom_rd, rom_wr;
+reg [7:0] cart_d_out;
+wire [7:0] cart_d_in;
 
 cart_iface cart_iface_impl (
 	.clk_8m(clk_8m),
 	.rst(rst),
-	.dout(rom_d),
+	.dout(rom_dout),
 	.din(rom_din),
 	.addr(rom_a),
 	.rd(rom_rd),
@@ -157,8 +161,6 @@ cart_iface cart_iface_impl (
 	.cart_busdir(cart_busdir)
 );
 
-wire [15:0] spicart_rom_a;
-wire spicart_rom_rd, spicart_rom_wr;
 
 spicart spi_cart_impl(
 	.clk(clk_8m),
@@ -168,7 +170,7 @@ spicart spi_cart_impl(
 	.spi_sck(spi_sck),
 	.spi_cs(spi_cs),
 
-	.cart_dout(rom_d),
+	.cart_dout(rom_dout),
 	.cart_din(rom_din),
 	.cart_a(spicart_rom_a),
 	.cart_rd(spicart_rom_rd),
@@ -178,8 +180,6 @@ spicart spi_cart_impl(
 
 
 /* Yosys doesn't do tristate nicely... instantiate it manually for the cart_d lines */
-reg [7:0] cart_d_out;
-wire [7:0] cart_d_in;
 reg [7:0] cart_d_oe;
 always @(*) begin
 	if (cart_busdir) begin
@@ -212,7 +212,7 @@ startupscreen_gen startupscreen_inst (
 	.lcd_newframe(newframe),
 
 	.rom_addr(ssgen_rom_a),
-	.rom_data(rom_d),
+	.rom_data(rom_dout),
 	.rom_rd(ssgen_rom_rd),
 	.rom_bsy(rom_bsy),
 
@@ -220,17 +220,9 @@ startupscreen_gen startupscreen_inst (
 	.startup_done(startup_done)
 );
 
-always @(*) begin
-	if (startup_done) begin
-		rom_rd = spicart_rom_rd;
-		rom_wr = spicart_rom_wr;
-		rom_a = spicart_rom_a;
-	end else begin
-		rom_rd = ssgen_rom_rd;
-		rom_wr = ssgen_rom_wr;
-		rom_a = ssgen_rom_a;
-	end
-end
+assign rom_rd = startup_done?spicart_rom_rd:ssgen_rom_rd;
+assign rom_wr = startup_done?spicart_rom_wr:0;
+assign rom_a = startup_done?spicart_rom_a:ssgen_rom_a;
 
 
 assign pwm_l = pwm_out;

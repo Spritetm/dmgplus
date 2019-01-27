@@ -21,6 +21,9 @@ all:
 	# Convert to bitstream using IcePack
 	icepack $(BUILD)/$(PROJ).asc $(BUILD)/$(PROJ).bin
 
+test:
+	iverilog -o test.vvp $(FILES)
+
 burn:
 	iceprog $(BUILD)/$(PROJ).bin
 

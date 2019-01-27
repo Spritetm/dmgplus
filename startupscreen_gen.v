@@ -122,8 +122,6 @@ end
 reg [7:0] ypos_in_logo;
 reg [7:0] xpos_in_logo;
 reg [7:0] logo_bit;
-wire all_done;
-assign startup_done = all_done;
 
 always @(*) begin
 	ypos_in_logo <= lcd_ypos - scroll + 'd34;

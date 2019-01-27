@@ -95,7 +95,7 @@ initial begin
 	spisend(0);
 	spisend(0);
 	spisend(0);
-	spi_cs <= 0;
+	#2 spi_cs <= 0;
 	#2 spi_cs <= 1;
 	#2 spisend('h80);
 	spisend('h00);
@@ -103,7 +103,7 @@ initial begin
 	spisend('ha1);
 	spisend('ha2);
 	spisend('ha3);
-	spi_cs <= 0;
+	#2 spi_cs <= 0;
 	
 	
 	#10 $finish;

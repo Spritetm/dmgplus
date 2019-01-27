@@ -25,10 +25,6 @@ reg curr_firstbyte;
 //Out-data is written on the falling edge of the signal (or CS becoming active), in-data is
 //read on the rising edge.
 
-//Sample mosi on posedge of clock
-always @(posedge sck) begin
-	sampled_mosi <= mosi;
-end
 
 assign miso = wdata[7];
 
@@ -37,34 +33,55 @@ reg flag_first_toggle;
 reg [2:0] flag_next_resamp;
 reg [2:0] flag_first_resamp;
 
-always @(negedge sck, negedge cs, posedge rst) begin
-	if (cs == 0 || rst == 1) begin
-		//deselected, abort transaction in progress
+//Sample mosi on posedge of clock
+always @(posedge sck) begin
+	sampled_mosi <= mosi;
+end
+
+reg cs_was_low;
+
+//This gives a clock that is high while CS is low.
+wire shift_maybe = sck | (!cs);
+
+always @(posedge shift_maybe) begin
+	if (cs==0) begin
+		cs_was_low = 1;
+	end else begin
+		cs_was_low = 0;
+	end
+end
+
+//shift on negedge
+//note shift_maybe is forced high during no cs, so we don't need to check for cs here.
+always @(negedge shift_maybe or posedge rst) begin
+	if (rst) begin
 		bit_sel <= 0;
-		curr_firstbyte <= 1;
-//		if (rst == 1) begin
-//			mdata <= 'h00;
-//		end
-		rdata <= 'h00;
-		wdata <= sdata;
-		first_byte <= 0;
 		flag_next_toggle <= 0;
-		flag_next_resamp <= 'b000;
 		flag_first_toggle <= 0;
-		flag_first_resamp <= 'b000;
-	end else if (sck == 0) begin
-		//selected, sck went low, output next bit
+		flag_next_resamp <= 0;
+		flag_first_resamp <= 0;
+		rdata <= 0;
+	end else begin
 		rdata <= {rdata[6:0], sampled_mosi};
 		wdata <= {wdata[6:0], 1'b0};
-		if (bit_sel == 7) begin
-			mdata <= {rdata[6:0], sampled_mosi};
+		if (cs_was_low) begin
+			bit_sel <= 0; //this is going to be the 0th bit
 			wdata <= sdata;
-			flag_next_toggle <= !flag_next_toggle;
-			if (curr_firstbyte) flag_first_toggle <= !flag_first_toggle;
-			curr_firstbyte <= 0;
-			bit_sel <= 0;
+			first_byte <= 1;
 		end else begin
-			bit_sel <= bit_sel+1;
+			if (bit_sel == 7) begin
+				//last bit
+				mdata <= {rdata[6:0], sampled_mosi};
+				wdata <= sdata;
+				flag_next_toggle <= !flag_next_toggle;
+				if (curr_firstbyte) flag_first_toggle <= !flag_first_toggle;
+				curr_firstbyte <= 0;
+				bit_sel <= 0;
+				if (first_byte) flag_first_toggle = !flag_first_toggle;
+				first_byte <= 0;
+			end else begin
+				bit_sel <= bit_sel+1;
+			end
 		end
 	end
 end
