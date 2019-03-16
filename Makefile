@@ -1,5 +1,5 @@
 TARGET := spi_cart_reader
-OBJS := main.o
+OBJS := main.o hexdump.o
 CFLAGS := -ggdb -Og
 LDFLAGS :=
 

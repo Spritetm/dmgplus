@@ -2,11 +2,14 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
+#include <string.h>
+#include "hexdump.h"
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -101,6 +104,14 @@ const no_desc_t lang_desc[]={
 	{0, NULL}
 };
 
+const uint8_t ninty_logo[0x30]={
+	0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 
+	0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 
+	0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 
+	0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 
+	0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E
+};
+
 int get_rom_bank_count(gb_header_t *hdr) {
 	int v=hdr->rom_size;
 	if (v<=8) {
@@ -109,7 +120,7 @@ int get_rom_bank_count(gb_header_t *hdr) {
 	if (v==0x52) return 72;
 	if (v==0x53) return 80;
 	if (v==0x54) return 96;
-	return 0;
+	return 2; //assume 32K rom
 }
 
 const char *select_desc(int no, const no_desc_t *desc) {
@@ -159,6 +170,12 @@ void gbcart_read(int fd, uint32_t addr, uint32_t len, uint8_t *buff) {
 	if (ret < 1) die("can't send spi message");
 }
 
+uint8_t gbcart_read_byte(int fd, uint32_t addr) {
+	uint8_t ret;
+	gbcart_read(fd, addr, 1, &ret);
+	return ret;
+}
+
 void gbcart_write(int fd, uint32_t addr, uint32_t len, uint8_t *buff) {
 	uint8_t tx[2]={0};
 	tx[0]=(addr>>8)|0x80;
@@ -182,14 +199,69 @@ void gbcart_write(int fd, uint32_t addr, uint32_t len, uint8_t *buff) {
 	if (ret < 1) die("can't send spi message");
 }
 
+void gbcart_write_byte(int fd, uint32_t addr, uint8_t byte) {
+	gbcart_write(fd, addr, 1, &byte);
+}
+
+uint8_t mangle_flashchip_data(uint8_t byte) {
+	uint8_t frobbyte=byte&0xFC;
+	if (byte&1) frobbyte|=2;
+	if (byte&2) frobbyte|=1;
+	return frobbyte;
+}
+
+void poke_flashchip(int fd, int addr, int byte) {
+	gbcart_write_byte(fd, addr, mangle_flashchip_data(byte));
+}
+
+int validate_cfi_data(uint8_t *buf) {
+	if (buf[0x20]!='Q' || buf[0x22]!='R' || buf[0x24]!='Y') {
+		printf("CFI data invalid. No flash cart?\n");
+		return 0;
+	}
+	int n=buf[0x4E];
+	printf("Found flash device: %d Kib\n", (1<<(n-10)));
+}
+
+void flash_wait_toggle(int fd, int addr) {
+	uint8_t b1[2], b2[2];
+	do {
+		gbcart_read(fd, addr, 2, &b1);
+		gbcart_read(fd, addr, 1, &b2);
+//		printf("%02X %02X\n", b1[0], b2[0]);
+	} while (b1[0]!=b2[0]);
+}
+
 
 int main(int argc, char *argv[]) {
 	int ret = 0;
 
+#if 0
 	system("raspi-gpio set 18 op");
 	system("raspi-gpio set 19 a4");
 	system("raspi-gpio set 20 a4");
 	system("raspi-gpio set 21 a4");
+#endif
+	
+	char *dumpfile=NULL;
+	int check=0;
+	int dowrite=0;
+	int doerase=0;
+	for (int i=1; i<argc; i++) {
+		if (strcmp(argv[i], "-check")==0) {
+			check=1;
+		} else if (strcmp(argv[i], "-write")==0) {
+			dowrite=1;
+		} else if (strcmp(argv[i], "-erase")==0) {
+			doerase=1;
+		} else if (dumpfile==NULL) {
+			dumpfile=argv[i];
+		} else {
+			printf("Error: did not understand %s\n", argv[i]);
+			printf("Usage: %s [-check] [-write] [dumpfile.bin]\n", argv[0]);
+			exit(1);
+		}
+	}
 
 	const char *device="/dev/spidev1.0";
 	int mode=SPI_MODE_0|SPI_CS_HIGH;
@@ -209,29 +281,163 @@ int main(int argc, char *argv[]) {
 	gb_header_t hdr={0};
 	gbcart_read(fd, 0x100, sizeof(hdr), (uint8_t*)&hdr);
 	show_gb_hdr_info(&hdr);
-
-	if (argc==1) return 0;
-
-	FILE *out=fopen(argv[1], "wb");
-	if (out==NULL) die(argv[1]);
-	uint8_t rdata[256];
-	int bankcnt=get_rom_bank_count(&hdr);
-	for (int bankno=0; bankno<bankcnt; bankno++) {
-		int addr;
-		if (bankno==0) {
-			addr=0;
-		} else {
-			addr=0x4000;
-			uint8_t w=bankno;
-			gbcart_write(fd, 0x2000, 1, &w);
+	
+	if (check) {
+		int hdr_ok=1;
+		if (memcmp(hdr.logo, ninty_logo, 0x30)!=0) {
+			hdr_ok=0;
+			printf("Header check failed: Nintendo logo data corrupted.\n");
 		}
-		printf("Reading bank %d of %d at 0x%x...\n", bankno, bankcnt, addr);
-		for (int j=0; j<16*1024; j+=sizeof(rdata)) {
-			gbcart_read(fd, addr+j, sizeof(rdata), rdata);
-			fwrite(rdata, sizeof(rdata), 1, out);
+		uint8_t chs=0;
+		uint8_t *chsmem=(uint8_t*)&hdr.title;
+		for (int i=0; i<0x19; i++) chs=chs-chsmem[i]-1;
+		if (chs!=hdr.hdr_chsum) {
+			hdr_ok=0;
+			printf("Header check failed: Checksum error (calc %02X read %02X).\n", chs, hdr.hdr_chsum);
 		}
+		return hdr_ok?0:1;
 	}
-	fclose(out);
+
+	if (dumpfile && !dowrite) {
+		FILE *out=fopen(dumpfile, "wb");
+		if (out==NULL) die(dumpfile);
+		uint8_t rdata[256];
+		int bankcnt=get_rom_bank_count(&hdr);
+
+		for (int bankno=0; bankno<bankcnt; bankno++) {
+			int addr;
+			if (bankno==0) {
+				addr=0;
+			} else {
+				addr=0x4000;
+				uint8_t w[1]={bankno};
+				gbcart_write(fd, 0x2000, 1, w);
+			}
+			int chs=0;
+			printf("Reading bank %d of %d at 0x%x...\n", bankno, bankcnt, addr);
+			for (int j=0; j<16*1024; j+=sizeof(rdata)) {
+				gbcart_read(fd, addr+j, sizeof(rdata), rdata);
+				fwrite(rdata, sizeof(rdata), 1, out);
+				for (int i=0; i<sizeof(rdata); i++) chs+=rdata[i];
+			}
+			chs=(chs&0xffff)+(chs>>16);
+			chs=(chs&0xffff)+(chs>>16);
+			printf("Checksum: %x\n", chs);
+		}
+		fclose(out);
+	}
+
+	if (dumpfile && dowrite) {
+		//Idea: Write bank to 0x2000 (0-n). Bank shows up at 4000-7FFF. Use that to poke the flash
+		//chip. (That also messes with the RAM enable and mapping; soit.)
+		printf("Checking flash cart...\n");
+		gbcart_write_byte(fd, 0x2000, 0); //switch to bank 0
+		poke_flashchip(fd, 0x00, 0xF0); //reset
+		poke_flashchip(fd, 0x00, 0xF0); //reset
+
+		poke_flashchip(fd, 0xAA, 0x98); //CFI query
+		uint8_t buf[100];
+		gbcart_read(fd, 0, 0x100, buf);
+		poke_flashchip(fd, 0, 0); //exit CFI query
+		for (int i=0; i<100; i++) buf[i]=mangle_flashchip_data(buf[i]);
+		int r=validate_cfi_data(buf);
+		if (!r) return 1;
+		
+		FILE *rom=fopen(dumpfile, "rb");
+		if (rom==NULL) die(dumpfile);
+		
+		if (doerase) {
+			printf("Erasing chip...\n");
+			poke_flashchip(fd, 0x0, 0x0a);
+			gbcart_write_byte(fd, 0x2000, 0x0); //switch to bank
+			poke_flashchip(fd, 0x2100, 0xf4);
+			poke_flashchip(fd, 0x4000, 0xf0);
+
+			poke_flashchip(fd, 0xaaa, 0xaa);
+			poke_flashchip(fd, 0x555, 0x55);
+			poke_flashchip(fd, 0xaaa, 0x80);
+			poke_flashchip(fd, 0xaaa, 0xaa);
+			poke_flashchip(fd, 0x555, 0x55);
+			poke_flashchip(fd, 0xaaa, 0x10); //erase chip
+//			poke_flashchip(fd, 0x0000, 0x30); //erase sector 0
+
+			int is_erased=0;
+			while (!is_erased) {
+				uint8_t data[1024];
+				is_erased=1;
+				gbcart_read(fd, 0x4000, 1024, data);
+				printf("%x %x %x %x\n", data[0], data[1], data[0], data[1]);
+				for (int i=0; i<1024; i++) {
+					if (data[i]!=0xff) {
+						is_erased=0;
+						break;
+					}
+				}
+			}
+		}
+		printf("Erased. Writing...\n");
+		int bank=0;
+		uint8_t rombank[16*1024];
+		while (fread(rombank, 1, 16*1024, rom)>0) {
+			printf("Bank %d\n", bank);
+#if 0
+			gbcart_write_byte(fd, 0x2000, bank); //switch to bank
+			poke_flashchip(fd, 0x2100, 0xf4);
+			for (int i=0; i<16*256; i+=4) {
+				gbcart_write_byte(fd, 0x2000, bank); //switch to bank
+				poke_flashchip(fd, 0x2100, 0xf4);
+				//Send quad write command
+
+				poke_flashchip(fd, 0x4000, 0xF0); //reset flash chip
+				poke_flashchip(fd, 0xaaa, 0x56); //quad write
+				gbcart_write(fd, i+0x4000, 4, &rombank[i]);
+				uint8_t rb[4];
+				for (int retry=2000; retry>0; retry--) {
+					gbcart_read(fd, i+0x4000, 4, rb);
+					if (memcmp(rb, &rombank[i], 4)==0) break;
+				}
+
+				if (memcmp(rb, &rombank[i], 4)!=0) {
+					printf("Verification error at 0x%X!\n", i);
+					printf("File:  %02X %02X %02X %02X\n", rombank[i], rombank[i+1], rombank[i+2], rombank[i+3]);
+					printf("Flash: %02X %02X %02X %02X\n", rb[0], rb[1], rb[2], rb[3]);
+					exit(0);
+				}
+			}
+#else
+			int retry_time=200;
+			for (int i=0; i<16*1024; i++) {
+//				gbcart_write_byte(fd, 0x0000, 0); //disable RAM
+				gbcart_write_byte(fd, 0x2000, bank); //switch to bank
+//				gbcart_write_byte(fd, 0x3000, bank>>8); //switch to bank
+//				gbcart_write_byte(fd, 0x2100, 0xf4);
+				//Send quad write command
+				//note: flash only uses first 12 address bits for commands: FFF
+//				poke_flashchip(fd, 0x0, 0xF0);
+				poke_flashchip(fd, 0xaaa, 0xaa);
+				poke_flashchip(fd, 0x555, 0x55);
+				poke_flashchip(fd, 0xaaa, 0xa0);
+				gbcart_write_byte(fd, i+0x4000, rombank[i]);
+				uint8_t res[2];
+//				usleep(5000);
+				for (int retry=0; retry<retry_time; retry++) {
+					res[0]=gbcart_read_byte(fd, i+0x4000);
+					res[1]=gbcart_read_byte(fd, i+0x4000);
+					if (res[0]==res[1] && res[1]==rombank[i]) break;
+				}
+				if (res[0]!=rombank[i]) {
+					printf("Error writing bank %d addr 0x%X! Data %x read %x/%x\n", bank, i, rombank[i], res[0], res[1]);
+					retry_time*=2;
+					i--;
+				} else {
+					retry_time=200;
+				}
+			}
+#endif
+			bank++;
+		}
+		printf("Done, %d banks written.\n", bank);
+	}
 
 	close(fd);
 	return 0;
