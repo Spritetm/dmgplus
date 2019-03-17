@@ -7,7 +7,7 @@ PCFFILE   = dmgplus.pcf
 
 # Files
 FILES = dmgplus.v ice40_pll.v dmg_lcd_ctl.v vram.v vidsampler.v startupscreen_gen.v cart_iface.v sndgen.v \
-	spicart.v spislave.v
+	spicart.v spislave.v dmgplus_splash.v
 
 .PHONY: all clean burn
 
@@ -38,6 +38,10 @@ cart_iface_testbench:
 spicart_testbench:
 	iverilog -o spicart_testbench.vvp spicart_testbench.v spislave.v cart_iface.v sb_io_model.v spicart.v
 	vvp spicart_testbench.vvp
+
+dmgplus_splash_testbench:
+	iverilog -o dmgplus_splash_testbench.vvp dmgplus_splash_testbench.v dmgplus_splash.v
+	vvp dmgplus_splash_testbench.vvp
 
 clean:
 	rm build/*

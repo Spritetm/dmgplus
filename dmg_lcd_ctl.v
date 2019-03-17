@@ -26,7 +26,7 @@ reg int_clk;
 reg [8:0] next_xpos;
 reg [7:0] next_ypos;
 reg is_even_frame, next_is_even_frame;
-wire newframe_com;
+reg newframe_com;
 
 //Note: Clock is 8MHz, int_clk is 4MHz, meaning a cycle time of 0.25uS.
 
@@ -66,7 +66,7 @@ reg d1_c;
 reg hsync_c;
 reg vsync_c;
 reg datal_c;
-reg altsig_c;
+wire altsig_c;
 reg clk_c;
 reg control_c;
 reg newframe_com_old;

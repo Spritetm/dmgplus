@@ -97,11 +97,14 @@ assign rpi_data=rpi_g[2:0]+rpi_r[1:0]+rpi_b[1];
 
 
 wire [15:0] vram_rd_ad;
-wire [15:0] vram_wr_ad;
-wire vram_w_clk;
-wire vram_we;
-wire [1:0] vram_w_data;
+reg [15:0] vram_wr_ad;
+reg vram_w_clk;
+reg vram_we;
+reg [1:0] vram_w_data;
 wire [1:0] vidsampler_data;
+wire vidsampler_vram_w_clk;
+wire [15:0] vidsampler_vram_wr_ad;
+wire vidsampler_vram_we;
 
 vidsampler vidsampler_inst (
 	.rst(rst),
@@ -109,10 +112,10 @@ vidsampler vidsampler_inst (
 	.rgb_de(rpi_dataen),
 	.rgb_vsync(rpi_vsync),
 	.rgb_data(rpi_data),
-	.vramclk(vram_w_clk),
-	.vramaddr(vram_wr_ad),
+	.vramclk(vidsampler_vram_w_clk),
+	.vramaddr(vidsampler_vram_wr_ad),
 	.vramdata(vidsampler_data),
-	.vramwe(vram_we),
+	.vramwe(vidsampler_vram_we),
 	.do_dither(1)
 );
 
@@ -131,13 +134,13 @@ vram vram_inst (
 
 wire [15:0] ssgen_rom_a;
 wire [15:0] spicart_rom_a;
-wire [15:0] rom_a;
+reg [15:0] rom_a;
 wire [7:0] rom_dout;
 wire [7:0] rom_din;
 wire ssgen_rom_rd;
 wire spicart_rom_rd, spicart_rom_wr;
 wire rom_bsy;
-wire rom_rd, rom_wr;
+reg rom_rd, rom_wr;
 reg [7:0] cart_d_out;
 wire [7:0] cart_d_in;
 
@@ -222,10 +225,76 @@ startupscreen_gen startupscreen_inst (
 	.startup_done(startup_done)
 );
 
-assign rom_rd = startup_rom_read_done?spicart_rom_rd:ssgen_rom_rd;
-assign rom_wr = startup_rom_read_done?spicart_rom_wr:0;
-assign rom_a = startup_rom_read_done?spicart_rom_a:ssgen_rom_a;
+wire dmgplus_splash_ena;
+wire cart_is_dmgplus;
+wire dmgplus_ss_rom_read_done;
+wire dmgplus_ss_done;
 
+wire [1:0] splash_data;
+wire splash_vram_w_clk;
+wire [15:0] splash_vram_wr_ad;
+wire splash_vram_we;
+
+reg [15:0] splgen_rom_a;
+reg splgen_rom_rd;
+
+
+dmgplus_splash_gen dmgplus_splash_gen_inst (
+	.clk_8m(clk_8m),
+	.rst(rst),
+
+	.ena(dmgplus_splash_ena),
+	.in_vblank(newframe),
+
+	.rom_addr(splgen_rom_a),
+	.rom_data(rom_dout),
+//	.rom_data(splgen_rom_a[7:0]),
+	.rom_rd(splgen_rom_rd),
+	.rom_bsy(rom_bsy),
+
+	.vramclk(splash_vram_w_clk),
+	.vramaddr(splash_vram_wr_ad),
+	.vramdata(splash_data),
+	.vramwe(splash_vram_we),
+
+	.is_dmgplus(cart_is_dmgplus),
+	.rom_read_done(dmgplus_ss_rom_read_done),
+	.splash_done(dmgplus_ss_done)
+);
+
+assign dmgplus_splash_ena = startup_rom_read_done;
+
+//spicart iface mux
+always @(*) begin
+	if (!startup_rom_read_done) begin
+		rom_rd = ssgen_rom_rd;
+		rom_wr = 0;
+		rom_a = ssgen_rom_a;
+	end else if (!dmgplus_ss_rom_read_done) begin
+		rom_rd = splgen_rom_rd;
+		rom_wr = 0;
+		rom_a = splgen_rom_a;
+	end else begin
+		rom_rd = spicart_rom_rd;
+		rom_wr = spicart_rom_wr;
+		rom_a = spicart_rom_a;
+	end
+end
+
+//vram write mux
+always @(*) begin
+	if (dmgplus_ss_done) begin
+		vram_w_clk = vidsampler_vram_w_clk;
+		vram_wr_ad = vidsampler_vram_wr_ad;
+		vram_w_data = vidsampler_data;
+		vram_we = vidsampler_vram_we;
+	end else begin
+		vram_w_clk = splash_vram_w_clk;
+		vram_wr_ad = splash_vram_wr_ad;
+		vram_w_data = splash_data;
+		vram_we = splash_vram_we;
+	end
+end
 
 assign pwm_l = pwm_out;
 assign pwm_r = pwm_out;
@@ -235,7 +304,6 @@ assign vram_rd_ad[7:0] = lcd_xpos;
 
 //assign gendata = lcd_xpos[4:3] ^ lcd_ypos[4:3];
 assign gendata = startup_done?vram_gendata:startupscreen_gendata;
-assign vram_w_data = vidsampler_data;
 //assign vram_w_data = vram_wr_ad[4:3];
 
 assign lp_dout = 0;
