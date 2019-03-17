@@ -71,11 +71,11 @@ input [7:0] d;
 integer i;
 begin
 	for (i=7; i>=0; --i) begin
-		#0.3 spi_mosi <= d[i];
+		#1.3 spi_mosi <= d[i];
 		spi_sck <= 0;
-		#0.3 spi_sck <= 1;
+		#1.3 spi_sck <= 1;
 	end
-	#0.3 spi_sck <= 0;
+	#1.3 spi_sck <= 0;
 end
 endtask
 
@@ -90,19 +90,19 @@ initial begin
 	#1 rst = 1;
 	#5 rst = 0;
 	#2.5 spi_cs <= 1;
-	spisend('h12);
-	spisend('h34);
+	spisend('h40);
+	spisend('h00);
 	spisend(0);
 	spisend(0);
 	spisend(0);
 	#2 spi_cs <= 0;
 	#2 spi_cs <= 1;
-	#2 spisend('h80);
+	#2 spisend('hA0);
 	spisend('h00);
-	spisend('ha0);
-	spisend('ha1);
-	spisend('ha2);
-	spisend('ha3);
+	spisend('h50);
+//	spisend('h51);
+//	spisend('h52);
+//	spisend('h53);
 	#2 spi_cs <= 0;
 	
 	

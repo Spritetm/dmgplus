@@ -4,7 +4,7 @@ module startupscreen_gen (
 
 	input wire [8:0] lcd_xpos,
 	input wire [7:0] lcd_ypos,
-	output wire [1:0] lcd_data,
+	output reg [1:0] lcd_data,
 	input wire lcd_newframe,
 
 	output wire [15:0] rom_addr,
@@ -13,12 +13,13 @@ module startupscreen_gen (
 	input wire rom_bsy,
 
 	output wire pwm_out,
+	output reg rom_read_done,
 	output wire startup_done
 );
 
 
-wire [10:0] sound_freq;
-wire sound_start;
+reg [10:0] sound_freq;
+reg sound_start;
 sndgen sndgen_inst(
 	.clk_8m(clk_8m),
 	.rst(rst),
@@ -83,33 +84,43 @@ always @(*) begin
 	logow_ypos = 4*logow_row + 2*logo_addr[0] + logo_wbit[2];
 end
 
+/*
+The following logic reads the logo area from the cart into logo_data so it can be used by the scrolling logic.
+rom_read_done will be set once everything is read. It does this by reading a byte at a time, then taking 8
+clock cycles to decode the bits.
+*/
+
 reg need_read_byte;
-
-
 always @(posedge clk_8m) begin
-	if (rst || vblanks==0) begin
+	if (rst) begin
 		cart_raddr <= 'd260; //logo start
 		logo_wbit <= 0;
 		need_read_byte <= 1;
 		rom_rd <= 0;
+		rom_read_done <= 0;
 	end else begin
 		rom_rd <= 0;
-		if (logo_wbit==0 && need_read_byte) begin
+		if (rom_read_done) begin
+			//all done
+		end else if (logo_wbit==0 && need_read_byte) begin
 			rom_rd <= 1;
 			need_read_byte <= 0;
 		end else if (rom_bsy) begin
 			//wait
 		end else if (logo_wbit==0 && !need_read_byte) begin
-			logo_rdat <= rom_data;
-			logo_wbit <= 1;
 			logo_data[logow_xpos][logow_ypos] <= rom_data[7];
+			if (cart_raddr == 308) begin
+				//all done
+				rom_read_done <= 1;
+			end else begin
+				logo_rdat <= rom_data;
+				logo_wbit <= 1;
+			end
 		end else if (logo_wbit!=0) begin
 			logo_wbit <= (logo_wbit==7)?0:logo_wbit+1;
 			logo_data[logow_xpos][logow_ypos] <= logo_rdat[7-logo_wbit];
-			if (logo_wbit == 7) begin
-				if (cart_raddr != 307) begin
-					 cart_raddr <= cart_raddr + 1;
-				end
+			if (logo_wbit == 7) begin	//done with this byte
+				cart_raddr <= cart_raddr + 1;
 				logo_wbit <= 0;
 				need_read_byte <= 1;
 			end else begin
@@ -118,6 +129,7 @@ always @(posedge clk_8m) begin
 		end
 	end
 end
+
 
 reg [7:0] ypos_in_logo;
 reg [7:0] xpos_in_logo;
@@ -136,7 +148,8 @@ always @(*) begin
 end
 
 wire all_done;
-assign all_done = (vblanks == 132*2);
+//assign all_done = (vblanks == 132*2);
+assign all_done = (vblanks == 162*2); //Slightly longer because RPi takes a bit to start
 assign startup_done = all_done;
 
 always @(*) begin

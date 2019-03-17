@@ -203,6 +203,7 @@ SB_IO #(
 
 wire pwm_out;
 wire startup_done;
+wire startup_rom_read_done;
 startupscreen_gen startupscreen_inst (
 	.clk_8m(clk_8m),
 	.rst(rst),
@@ -217,12 +218,13 @@ startupscreen_gen startupscreen_inst (
 	.rom_bsy(rom_bsy),
 
 	.pwm_out(pwm_out),
+	.rom_read_done(startup_rom_read_done),
 	.startup_done(startup_done)
 );
 
-assign rom_rd = startup_done?spicart_rom_rd:ssgen_rom_rd;
-assign rom_wr = startup_done?spicart_rom_wr:0;
-assign rom_a = startup_done?spicart_rom_a:ssgen_rom_a;
+assign rom_rd = startup_rom_read_done?spicart_rom_rd:ssgen_rom_rd;
+assign rom_wr = startup_rom_read_done?spicart_rom_wr:0;
+assign rom_a = startup_rom_read_done?spicart_rom_a:ssgen_rom_a;
 
 
 assign pwm_l = pwm_out;
