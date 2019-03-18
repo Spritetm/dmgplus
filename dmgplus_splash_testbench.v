@@ -45,10 +45,12 @@ dmgplus_splash_gen dmgplus_splash_gen_inst (
 //clock toggle
 always #1 clk = !clk;
 
+reg [7:0] cartmem [0:65535];
+
 //rom emu
 always @(posedge rom_rd) begin
 	rom_bsy <= 1;
-	#10 rom_dout <= rom_a[7:0];
+	#10 rom_dout <= cartmem[rom_a];
 	#1 rom_bsy <= 0;
 end
 
@@ -57,12 +59,16 @@ initial begin
 	rst = 1;
 	newframe = 0;
 	dmgplus_splash_ena = 0;
-	$dumpfile("spislave_testbench.vcd");
+	$dumpfile("dmgplus_splash_testbench.vcd");
 	$dumpvars(0, stimulus);
+	$readmemh("doom.mem", cartmem);
 	#10 rst = 0;
 	#10 dmgplus_splash_ena = 1;
-
-	#8000 $finish;
+	for (i=0; i<800; i++) begin
+		#10 newframe <= 1;
+		#1 newframe <= 0;
+	end
+	$finish;
 end
 
 endmodule

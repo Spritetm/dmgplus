@@ -227,8 +227,8 @@ startupscreen_gen startupscreen_inst (
 
 wire dmgplus_splash_ena;
 wire cart_is_dmgplus;
-wire dmgplus_ss_rom_read_done;
-wire dmgplus_ss_done;
+wire dmgplus_splash_rom_read_done;
+wire dmgplus_splash_done;
 
 wire [1:0] splash_data;
 wire splash_vram_w_clk;
@@ -244,11 +244,10 @@ dmgplus_splash_gen dmgplus_splash_gen_inst (
 	.rst(rst),
 
 	.ena(dmgplus_splash_ena),
-	.in_vblank(newframe),
+	.lcd_newframe(newframe),
 
 	.rom_addr(splgen_rom_a),
 	.rom_data(rom_dout),
-//	.rom_data(splgen_rom_a[7:0]),
 	.rom_rd(splgen_rom_rd),
 	.rom_bsy(rom_bsy),
 
@@ -258,11 +257,13 @@ dmgplus_splash_gen dmgplus_splash_gen_inst (
 	.vramwe(splash_vram_we),
 
 	.is_dmgplus(cart_is_dmgplus),
-	.rom_read_done(dmgplus_ss_rom_read_done),
-	.splash_done(dmgplus_ss_done)
+	.rom_read_done(dmgplus_splash_rom_read_done),
+	.splash_done(dmgplus_splash_done)
 );
 
-assign dmgplus_splash_ena = startup_rom_read_done;
+//note: with this, splash delay will start counting almost immediately after power up
+//assign dmgplus_splash_ena = startup_rom_read_done;
+assign dmgplus_splash_ena = startup_done;
 
 //spicart iface mux
 always @(*) begin
@@ -270,7 +271,7 @@ always @(*) begin
 		rom_rd = ssgen_rom_rd;
 		rom_wr = 0;
 		rom_a = ssgen_rom_a;
-	end else if (!dmgplus_ss_rom_read_done) begin
+	end else if (!dmgplus_splash_rom_read_done) begin
 		rom_rd = splgen_rom_rd;
 		rom_wr = 0;
 		rom_a = splgen_rom_a;
@@ -282,8 +283,9 @@ always @(*) begin
 end
 
 //vram write mux
+//note startup screen writes directly to the LCD iface
 always @(*) begin
-	if (dmgplus_ss_done) begin
+	if (dmgplus_splash_done) begin
 		vram_w_clk = vidsampler_vram_w_clk;
 		vram_wr_ad = vidsampler_vram_wr_ad;
 		vram_w_data = vidsampler_data;

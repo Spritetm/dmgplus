@@ -10,7 +10,7 @@ module dmgplus_splash_gen (
 	input wire rst,
 
 	input wire ena,
-	input wire in_vblank, //actually, start of frame... should be high for 1clk when new frame starts.
+	input wire lcd_newframe,
 
 	//ROM iface
 	output reg [15:0] rom_addr,
@@ -39,40 +39,57 @@ reg need_read_byte;
 reg [1:0] pixelno;
 reg [7:0] xpos;
 reg [7:0] ypos;
+reg [15:0] delay_frames;
 always @(posedge clk_8m) begin
-	if (rst) begin
+	if (rst || !ena) begin
 		check_sig_done <= 0;
 		rom_read_done <= 0;
 		is_dmgplus <= 1;
 		need_read_byte <= 1;
 		pixelno <= 'b00;
 		splash_done <= 0;
-		rom_addr <= 'h100;
+		rom_addr <= 'hfe;
 		xpos <= -1;
 		ypos <= -1;
 	end else begin
 		rom_rd <= 0;
 		vramwe <= 0;
 		if (rom_read_done) begin
-			//all done
+			//delay splash_done as indicated by header
+			if (!is_dmgplus) begin
+				splash_done <= 1;
+			end else begin
+				if (lcd_newframe) begin
+					delay_frames <= delay_frames - 1;
+				end
+				if (delay_frames == 0) begin
+					splash_done <= 1;
+				end
+			end
 		end else if (need_read_byte) begin
 			rom_rd <= 1;
 			need_read_byte <= 0;
 		end else if (rom_bsy) begin
 			//wait until byte is read
 		end else if (!check_sig_done) begin
-			if (rom_addr[1:0]==0 && rom_data!='h44) is_dmgplus <= 0;
-			if (rom_addr[1:0]==1 && rom_data!='h4D) is_dmgplus <= 0;
-			if (rom_addr[1:0]==2 && rom_data!='h47) is_dmgplus <= 0;
-			if (rom_addr[1:0]==3 && rom_data!='h2B) is_dmgplus <= 0;
-			if (rom_addr[1:0]==3) begin
+			if (rom_addr[2:0]==6) delay_frames[7:0] <= rom_data;
+			if (rom_addr[2:0]==7) delay_frames[15:8] <= rom_data;
+			if (rom_addr[2:0]==0 && rom_data!='h44) is_dmgplus <= 0;
+			if (rom_addr[2:0]==1 && rom_data!='h4D) is_dmgplus <= 0;
+			if (rom_addr[2:0]==2 && rom_data!='h47) is_dmgplus <= 0;
+			if (rom_addr[2:0]==3 && rom_data!='h2B) is_dmgplus <= 0;
+			if (!is_dmgplus) begin
+				//No dmgplus cart; abort.
+				rom_read_done <= 1;
+			end
+			if (rom_addr[2:0]==3) begin
 				check_sig_done <= 1;
 				rom_addr <= 'h134;
 			end else begin
 				rom_addr <= rom_addr + 1;
 			end
 			need_read_byte <= 1;
-		end else begin
+		end else begin //check_sig_done
 			if (pixelno == 0) begin
 				pixelno <= 1;
 				vramdata <= rom_data[7:6];
@@ -86,7 +103,12 @@ always @(posedge clk_8m) begin
 				pixelno <= 0;
 				vramdata <= rom_data[1:0];
 				rom_addr <= rom_addr + 1;
+`ifdef __ICARUS__
+				//simulation: stop at 2 lines
+				if (ypos < 2) begin
+`else
 				if (ypos < 143) begin
+`endif
 					need_read_byte <= 1;
 				end else begin
 					rom_read_done <= 1;

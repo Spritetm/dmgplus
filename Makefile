@@ -39,9 +39,12 @@ spicart_testbench:
 	iverilog -o spicart_testbench.vvp spicart_testbench.v spislave.v cart_iface.v sb_io_model.v spicart.v
 	vvp spicart_testbench.vvp
 
-dmgplus_splash_testbench:
+dmgplus_splash_testbench: doom.mem
 	iverilog -o dmgplus_splash_testbench.vvp dmgplus_splash_testbench.v dmgplus_splash.v
 	vvp dmgplus_splash_testbench.vvp
+
+doom.mem:
+	cat conv_startupscreen/doom.bin | hexdump -v -e '/1 "%02X\n"' > doom.mem
 
 clean:
 	rm build/*
