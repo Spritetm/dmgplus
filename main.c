@@ -20,7 +20,7 @@ static void die(const char *s) {
 
 
 typedef struct __attribute__((packed)) {
-	uint32_t entry_point;
+	uint8_t entry_point[4];
 	uint8_t logo[0x30];
 	uint8_t title[15];
 	uint8_t cgb_flag;
@@ -190,7 +190,7 @@ void gbcart_write(int fd, uint32_t addr, uint32_t len, uint8_t *buff) {
 			.len=len,
 			.cs_change=1
 		},{
-			.delay_usecs=5,
+			.delay_usecs=2,
 			.cs_change=1
 		}
 	};
@@ -226,8 +226,8 @@ int validate_cfi_data(uint8_t *buf) {
 void flash_wait_toggle(int fd, int addr) {
 	uint8_t b1[2], b2[2];
 	do {
-		gbcart_read(fd, addr, 2, &b1);
-		gbcart_read(fd, addr, 1, &b2);
+		gbcart_read(fd, addr, 2, b1);
+		gbcart_read(fd, addr, 1, b2);
 //		printf("%02X %02X\n", b1[0], b2[0]);
 	} while (b1[0]!=b2[0]);
 }
@@ -247,9 +247,12 @@ int main(int argc, char *argv[]) {
 	int check=0;
 	int dowrite=0;
 	int doerase=0;
+	int getname=0;
 	for (int i=1; i<argc; i++) {
 		if (strcmp(argv[i], "-check")==0) {
 			check=1;
+		} else if (strcmp(argv[i], "-getname")==0) {
+			getname=1;
 		} else if (strcmp(argv[i], "-write")==0) {
 			dowrite=1;
 		} else if (strcmp(argv[i], "-erase")==0) {
@@ -258,14 +261,14 @@ int main(int argc, char *argv[]) {
 			dumpfile=argv[i];
 		} else {
 			printf("Error: did not understand %s\n", argv[i]);
-			printf("Usage: %s [-check] [-write] [dumpfile.bin]\n", argv[0]);
+			printf("Usage: %s [-check] [-getname] [-write [-erase]] [dumpfile.bin]\n", argv[0]);
 			exit(1);
 		}
 	}
 
 	const char *device="/dev/spidev1.0";
 	int mode=SPI_MODE_0|SPI_CS_HIGH;
-	int speed=1000000;
+	int speed=8000000;
 	int delay_us=0;
 	int bits=8;
 
@@ -280,25 +283,49 @@ int main(int argc, char *argv[]) {
 
 	gb_header_t hdr={0};
 	gbcart_read(fd, 0x100, sizeof(hdr), (uint8_t*)&hdr);
-	show_gb_hdr_info(&hdr);
 	
-	if (check) {
+	if (check || getname) {
 		int hdr_ok=1;
+		int logo_ok=1;
+		int is_dmgplus=0;
+		if (check) show_gb_hdr_info(&hdr);
 		if (memcmp(hdr.logo, ninty_logo, 0x30)!=0) {
 			hdr_ok=0;
-			printf("Header check failed: Nintendo logo data corrupted.\n");
+			logo_ok=0;
+			if (check) printf("Header check failed: Nintendo logo data corrupted.\n");
 		}
 		uint8_t chs=0;
 		uint8_t *chsmem=(uint8_t*)&hdr.title;
 		for (int i=0; i<0x19; i++) chs=chs-chsmem[i]-1;
 		if (chs!=hdr.hdr_chsum) {
 			hdr_ok=0;
-			printf("Header check failed: Checksum error (calc %02X read %02X).\n", chs, hdr.hdr_chsum);
+			if (check) printf("Header check failed: Checksum error (calc %02X read %02X).\n", chs, hdr.hdr_chsum);
 		}
-		return hdr_ok?0:1;
+		if (logo_ok) {
+			if (memcmp(hdr.entry_point, "DMG+", 4)==0) {
+				if (check) printf("Cart is DMGPlus dummy cart\n");
+				is_dmgplus=1;
+			}
+		}
+		if (getname) {
+			if (hdr_ok) {
+				printf("%s\n", hdr.title);
+			} else if (is_dmgplus) {
+				char buff[128];
+				gbcart_read(fd, 0x0, 128, (uint8_t*)buff);
+				printf("%s\n", buff);
+			} else {
+				printf("-\n");
+			}
+		}
+
+		if (hdr_ok) return 0;
+		if (is_dmgplus) return 2;
+		return 1;
 	}
 
 	if (dumpfile && !dowrite) {
+		show_gb_hdr_info(&hdr);
 		FILE *out=fopen(dumpfile, "wb");
 		if (out==NULL) die(dumpfile);
 		uint8_t rdata[256];
@@ -360,6 +387,7 @@ int main(int argc, char *argv[]) {
 			poke_flashchip(fd, 0x555, 0x55);
 			poke_flashchip(fd, 0xaaa, 0x10); //erase chip
 //			poke_flashchip(fd, 0x0000, 0x30); //erase sector 0
+			flash_wait_toggle(fd, 0);
 
 			int is_erased=0;
 			while (!is_erased) {
@@ -374,8 +402,9 @@ int main(int argc, char *argv[]) {
 					}
 				}
 			}
+			printf("Erased.\n");
 		}
-		printf("Erased. Writing...\n");
+		printf("Writing...\n");
 		int bank=0;
 		uint8_t rombank[16*1024];
 		while (fread(rombank, 1, 16*1024, rom)>0) {
@@ -407,19 +436,19 @@ int main(int argc, char *argv[]) {
 #else
 			int retry_time=200;
 			for (int i=0; i<16*1024; i++) {
-//				gbcart_write_byte(fd, 0x0000, 0); //disable RAM
 				gbcart_write_byte(fd, 0x2000, bank); //switch to bank
-//				gbcart_write_byte(fd, 0x3000, bank>>8); //switch to bank
-//				gbcart_write_byte(fd, 0x2100, 0xf4);
+				if (gbcart_read_byte(fd, i+0x4000)==rombank[i]) continue;
+
 				//Send quad write command
 				//note: flash only uses first 12 address bits for commands: FFF
-//				poke_flashchip(fd, 0x0, 0xF0);
+				poke_flashchip(fd, 0x0, 0xF0);  //<-- without this, *some* writes go bad.
 				poke_flashchip(fd, 0xaaa, 0xaa);
 				poke_flashchip(fd, 0x555, 0x55);
 				poke_flashchip(fd, 0xaaa, 0xa0);
 				gbcart_write_byte(fd, i+0x4000, rombank[i]);
+
 				uint8_t res[2];
-//				usleep(5000);
+				if (i==0xaaa || i==0xaab) usleep(10000); //don't ask
 				for (int retry=0; retry<retry_time; retry++) {
 					res[0]=gbcart_read_byte(fd, i+0x4000);
 					res[1]=gbcart_read_byte(fd, i+0x4000);
@@ -428,7 +457,11 @@ int main(int argc, char *argv[]) {
 				if (res[0]!=rombank[i]) {
 					printf("Error writing bank %d addr 0x%X! Data %x read %x/%x\n", bank, i, rombank[i], res[0], res[1]);
 					retry_time*=2;
-					i--;
+					if (retry_time<6400) {
+						i--;
+					} else {
+						printf("Ignoring error.\n");
+					}
 				} else {
 					retry_time=200;
 				}
