@@ -262,8 +262,10 @@ dmgplus_splash_gen dmgplus_splash_gen_inst (
 );
 
 //note: with this, splash delay will start counting almost immediately after power up
-//assign dmgplus_splash_ena = startup_rom_read_done;
-assign dmgplus_splash_ena = startup_done;
+assign dmgplus_splash_ena = startup_rom_read_done;
+//With this, counting starts after the startup screen, but this means the cart iface
+//is unaccessible when the Pi already is booted into user space.
+//assign dmgplus_splash_ena = startup_done;
 
 //spicart iface mux
 always @(*) begin
