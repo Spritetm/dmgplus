@@ -1,9 +1,0 @@
-
-#Source this file: . xenv
-
-DIAMOND_DIR=~/diamond
-
-export DIAMOND_DIR
-cd ${DIAMOND_DIR}/bin/lin64
-bindir=${DIAMOND_DIR}/bin/lin64 . ./diamond_env
-cd -
