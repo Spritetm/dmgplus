@@ -286,6 +286,11 @@ end
 
 //vram write mux
 //note startup screen writes directly to the LCD iface
+/*
+Problem here: the write clock is gated, causing all sorts of fancy issues and corruption in both modes.
+We can solve this by connecting it to one clock and cross domains from the other clock to this.
+Theoretically, the RGB clock is 3.2MHz, so we can use something simple for this...
+*/
 always @(*) begin
 	if (dmgplus_splash_done) begin
 		vram_w_clk = vidsampler_vram_w_clk;

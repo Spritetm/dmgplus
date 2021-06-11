@@ -21,7 +21,7 @@ git clone https://github.com/raspberrypi/linux raspberrypi-linux
 cd raspberrypi-linux
 patch -p1 < ../patch-keypad-polling-reworked.diff
 make ARCH=arm bcmrpi_defconfig
-make-kpkg --arch armhf --rootcmd fakeroot --arch arm --cross-compile arm-linux-gnueabihf- --revision=1.0 --jobs 3 kernel_image
+make-kpkg --arch armhf --rootcmd fakeroot --cross-compile arm-linux-gnueabihf- --revision=1.0 --jobs 3 kernel_image
 (disregard gnu system type != gcc system type warnings)
 
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- zImage modules dtbs

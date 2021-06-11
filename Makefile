@@ -1,7 +1,7 @@
 # Project setup
 PROJ      = dmgplus
 BUILD     = ./build
-DEVICE    = 8k
+DEVICE    = lp8k
 FOOTPRINT = tq144:4k
 PCFFILE   = dmgplus.pcf
 
@@ -15,9 +15,9 @@ all:
 	# if build folder doesn't exist, create it
 	mkdir -p $(BUILD)
 	# synthesize using Yosys
-	yosys -p "synth_ice40 -top dmgplus_top -blif $(BUILD)/$(PROJ).blif" $(FILES)
-	# Place and route using arachne
-	arachne-pnr -d $(DEVICE) -P $(FOOTPRINT) -o $(BUILD)/$(PROJ).asc -p $(PCFFILE) $(BUILD)/$(PROJ).blif
+	yosys -p "synth_ice40 -top dmgplus_top -json $(BUILD)/$(PROJ).json" $(FILES)
+	# Place and route using nextpnr. Note we need the --ignore-loops as we have a ring oscillator in the design.
+	nextpnr-ice40 --ignore-loops --$(DEVICE) --package $(FOOTPRINT) --json $(BUILD)/$(PROJ).json --pcf $(PCFFILE) --asc $(BUILD)/$(PROJ).asc
 	# Convert to bitstream using IcePack
 	icepack $(BUILD)/$(PROJ).asc $(BUILD)/$(PROJ).bin
 
