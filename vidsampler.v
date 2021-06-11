@@ -1,3 +1,8 @@
+/*
+This samples & dithers video. It also does clock domain crossing for the video signal
+from the dpi pixel clock domain to the vram clock domain.
+*/
+
 module vidsampler (
 	input wire rst,
 	input wire rgb_clk,
@@ -6,10 +11,10 @@ module vidsampler (
 	input wire [3:0] rgb_data,
 	input wire do_dither,
 	
-	output wire vramclk,
+	input wire vramclk,
 	output wire [15:0] vramaddr,
 	output wire [1:0] vramdata,
-	output wire vramwe
+	output reg vramwe
 );
 
 reg [7:0] xpos;
@@ -46,12 +51,38 @@ always @(*) begin
 	endcase
 end
 
-assign vramdata = dithered;
+/* Clock domain crossing */
+reg [15:0] vramaddr_rgbclk;
+reg [1:0] vramdata_rgbclk;
+reg vramwe_toggle_rgbclk;
+always @(posedge rgb_clk) begin
+	if (rst) begin
+		vramaddr_rgbclk <= 0;
+		vramwe_toggle_rgbclk <= 0;
+	end else begin
+		if (rgb_de) begin
+			vramwe_toggle_rgbclk <= !vramwe_toggle_rgbclk;
+			vramaddr_rgbclk[15:8] <= ypos;
+			vramaddr_rgbclk[7:0] <= xpos;
+			vramdata_rgbclk <= dithered;
+		end
+	end
+end
 
-assign vramclk = rgb_clk;
-assign vramwe = rgb_de;
-assign vramaddr[15:8] = ypos;
-assign vramaddr[7:0] = xpos;
+reg [2:0] vramwe_toggle_xclk;
+reg [15:0] vramaddr_xclk[0:1];
+reg [1:0] vramdata_xclk[0:1];
+assign vramaddr = vramaddr_xclk[1];
+assign vramdata = vramdata_xclk[1];
+always @(posedge vramclk) begin
+	vramwe_toggle_xclk[0]<=vramwe_toggle_rgbclk;
+	vramwe_toggle_xclk[2:1]<=vramwe_toggle_xclk[1:0];
+	vramaddr_xclk[0]<=vramaddr_rgbclk;
+	vramaddr_xclk[1]<=vramaddr_xclk[0];
+	vramdata_xclk[0]<=vramdata_rgbclk;
+	vramdata_xclk[1]<=vramdata_xclk[0];
+	vramwe <= (vramwe_toggle_xclk[2]!=vramwe_toggle_xclk[1]);
+end
 
 always @ (posedge rgb_clk or posedge rst) begin
 	if (rst) begin

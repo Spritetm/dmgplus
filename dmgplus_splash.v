@@ -30,8 +30,6 @@ module dmgplus_splash_gen (
 	output reg splash_done
 );
 
-assign vramclk = clk_8m;
-
 //This logic reads 0x100-0x103 and checks if it contains 'DMG+'; it also loads the VRAM
 //with the contents of 0x134 and further.
 reg check_sig_done;

@@ -35,6 +35,10 @@ cart_iface_testbench:
 	iverilog -o cart_iface_testbench.vvp cart_iface_testbench.v cart_iface.v sb_io_model.v
 	vvp cart_iface_testbench.vvp
 
+vidsampler_testbench:
+	iverilog -o vidsampler_testbench.vvp vidsampler_testbench.v vidsampler.v
+	vvp vidsampler_testbench.vvp
+
 spicart_testbench:
 	iverilog -o spicart_testbench.vvp spicart_testbench.v spislave.v cart_iface.v sb_io_model.v spicart.v
 	vvp spicart_testbench.vvp

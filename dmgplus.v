@@ -42,14 +42,16 @@ wire clk_8m;
 
 //Flipping heck, the ICE40HX has no internal oscillator, and the design doesn't have an external one.
 //Hack up a ring osc to do the job for now.
-wire [69:0] buffers_in, buffers_out;
+`define ROSC_STAGES 77
+
+wire [`ROSC_STAGES:0] buffers_in, buffers_out;
 wire chain_in, chain_out;
-assign buffers_in = {buffers_out[68:0], chain_in};
-assign chain_out = buffers_out[69];
+assign buffers_in = {buffers_out[`ROSC_STAGES-1:0], chain_in};
+assign chain_out = buffers_out[`ROSC_STAGES];
 assign chain_in = !chain_out;
 SB_LUT4 #(
 	.LUT_INIT(16'd2)
-) buffers [69:0] (
+) buffers [`ROSC_STAGES:0] (
 	.O(buffers_out),
 	.I0(buffers_in),
 	.I1(1'b0),
@@ -98,11 +100,9 @@ assign rpi_data=rpi_g[2:0]+rpi_r[1:0]+rpi_b[1];
 
 wire [15:0] vram_rd_ad;
 reg [15:0] vram_wr_ad;
-reg vram_w_clk;
 reg vram_we;
 reg [1:0] vram_w_data;
 wire [1:0] vidsampler_data;
-wire vidsampler_vram_w_clk;
 wire [15:0] vidsampler_vram_wr_ad;
 wire vidsampler_vram_we;
 
@@ -112,18 +112,18 @@ vidsampler vidsampler_inst (
 	.rgb_de(rpi_dataen),
 	.rgb_vsync(rpi_vsync),
 	.rgb_data(rpi_data),
-	.vramclk(vidsampler_vram_w_clk),
+	.vramclk(clk_8m),
 	.vramaddr(vidsampler_vram_wr_ad),
 	.vramdata(vidsampler_data),
 	.vramwe(vidsampler_vram_we),
-	.do_dither(1)
+	.do_dither(1'b1)
 );
 
 vram vram_inst (
 	.WrAddress(vram_wr_ad),
 	.Data(vram_w_data),
 	.WE(vram_we),
-	.WrClock(vram_w_clk),
+	.WrClock(clk_8m),
 	.WrClockEn(1'b1),
 	.RdAddress(vram_rd_ad),
 	.Q(vram_gendata),
@@ -231,7 +231,6 @@ wire dmgplus_splash_rom_read_done;
 wire dmgplus_splash_done;
 
 wire [1:0] splash_data;
-wire splash_vram_w_clk;
 wire [15:0] splash_vram_wr_ad;
 wire splash_vram_we;
 
@@ -251,7 +250,6 @@ dmgplus_splash_gen dmgplus_splash_gen_inst (
 	.rom_rd(splgen_rom_rd),
 	.rom_bsy(rom_bsy),
 
-	.vramclk(splash_vram_w_clk),
 	.vramaddr(splash_vram_wr_ad),
 	.vramdata(splash_data),
 	.vramwe(splash_vram_we),
@@ -285,7 +283,7 @@ always @(*) begin
 end
 
 //vram write mux
-//note startup screen writes directly to the LCD iface
+//note startup screen writes directly to the LCD iface, it doesn't go through vram.
 /*
 Problem here: the write clock is gated, causing all sorts of fancy issues and corruption in both modes.
 We can solve this by connecting it to one clock and cross domains from the other clock to this.
@@ -293,12 +291,10 @@ Theoretically, the RGB clock is 3.2MHz, so we can use something simple for this.
 */
 always @(*) begin
 	if (dmgplus_splash_done) begin
-		vram_w_clk = vidsampler_vram_w_clk;
 		vram_wr_ad = vidsampler_vram_wr_ad;
 		vram_w_data = vidsampler_data;
 		vram_we = vidsampler_vram_we;
 	end else begin
-		vram_w_clk = splash_vram_w_clk;
 		vram_wr_ad = splash_vram_wr_ad;
 		vram_w_data = splash_data;
 		vram_we = splash_vram_we;
