@@ -43,6 +43,7 @@ typedef struct __attribute__((packed)) {
 int main(int argc, char **argv) {
 	if (argc<4) {
 		printf("%s name-of-game startupscreen.png delay outputfile.bin\n", argv[0]);
+		printf("delay is in (1/60th second) frames\n");
 		exit(1);
 	}
 
