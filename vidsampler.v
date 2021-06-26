@@ -9,7 +9,6 @@ module vidsampler (
 	input wire rgb_de,
 	input wire rgb_vsync,
 	input wire [3:0] rgb_data,
-	input wire do_dither,
 	
 	input wire vramclk,
 	output wire [15:0] vramaddr,

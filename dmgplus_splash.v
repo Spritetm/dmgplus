@@ -60,7 +60,8 @@ always @(posedge clk_8m) begin
 				if (lcd_newframe) begin
 					delay_frames <= delay_frames - 1;
 				end
-				if (delay_frames == 0) begin
+				//Hack: compensate a bit for changed boot times
+				if (delay_frames == ('h10000 - 130)) begin
 					splash_done <= 1;
 				end
 			end

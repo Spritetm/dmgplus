@@ -115,8 +115,7 @@ vidsampler vidsampler_inst (
 	.vramclk(clk_8m),
 	.vramaddr(vidsampler_vram_wr_ad),
 	.vramdata(vidsampler_data),
-	.vramwe(vidsampler_vram_we),
-	.do_dither(1'b1)
+	.vramwe(vidsampler_vram_we)
 );
 
 vram vram_inst (
@@ -206,6 +205,7 @@ SB_IO #(
 
 wire pwm_out;
 wire startup_done;
+wire cart_is_dmgplus;
 wire startup_rom_read_done;
 startupscreen_gen startupscreen_inst (
 	.clk_8m(clk_8m),
@@ -222,11 +222,11 @@ startupscreen_gen startupscreen_inst (
 
 	.pwm_out(pwm_out),
 	.rom_read_done(startup_rom_read_done),
-	.startup_done(startup_done)
+	.startup_done(startup_done),
+	.is_dmgplus(cart_is_dmgplus)
 );
 
 wire dmgplus_splash_ena;
-wire cart_is_dmgplus;
 wire dmgplus_splash_rom_read_done;
 wire dmgplus_splash_done;
 

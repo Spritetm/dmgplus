@@ -14,7 +14,9 @@ module startupscreen_gen (
 
 	output wire pwm_out,
 	output reg rom_read_done,
-	output wire startup_done
+	output wire startup_done,
+
+	input is_dmgplus
 );
 
 
@@ -34,7 +36,7 @@ We flatten it while reading.
 */
 
 reg logo_data[0:47][0:7];
-reg [8:0] vblanks;
+reg [9:0] vblanks;
 reg [7:0] scroll;
 reg [7:0] rsign[7:0];
 
@@ -148,8 +150,9 @@ always @(*) begin
 end
 
 wire all_done;
-//assign all_done = (vblanks == 132*2);
-assign all_done = (vblanks == 162*2); //Slightly longer because RPi takes a bit to start
+//If not DMGPlus, delay 'Nintendo' logo a bit for gnuboy to properly start.
+//If DMGPlus, the splash loader will display, so we can keep original timing.
+assign all_done = is_dmgplus ? (vblanks == 132*2) : (vblanks == 220*2);
 assign startup_done = all_done;
 
 always @(*) begin
