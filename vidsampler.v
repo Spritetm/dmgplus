@@ -19,35 +19,30 @@ module vidsampler (
 reg [7:0] xpos;
 reg [7:0] ypos;
 
-wire [3:0] rgbdithered;
+wire [4:0] rgbdithered;
 wire [1:0] ditherval;
 reg [1:0] frameno;
 //The incoming RGB value is [0..11].
-//We dither by adding a (time and pixel position dependent) value between 0 and 3 to the pixel.
-//This results in a range of [0..14].
-assign ditherval = xpos[1:0] + ypos[1:0] + frameno;
-assign rgbdithered = rgb_data + ditherval;
+//We dither by adding a (time and pixel position dependent) value between 0 and 7 to the pixel.
+//This results in a range of [0..18].
+
+//Note that for a b->w gradient, the expected sequence is
+//0, 1, 3, 4, 7, 8, 10, 11
+
+assign ditherval = xpos[3:2] + xpos[1:0] + ypos[2:0] + frameno;
+//uncomment to show dithered on right, undithered on left
+//assign rgbdithered = (xpos > 80) ? (rgb_data + ditherval) : (rgb_data[3:0]);
+assign rgbdithered = (rgb_data + ditherval);
 
 reg [1:0] dithered;
 always @(*) begin
-	case(rgbdithered) 
-		0: dithered = 0;
-		1: dithered = 0;
-		2: dithered = 0;
-		3: dithered = 0;
-		4: dithered = 1;
-		5: dithered = 1;
-		6: dithered = 1;
-		7: dithered = 1;
-		8: dithered = 2;
-		9: dithered = 2;
-		10: dithered = 2;
-		11: dithered = 3;
-		12: dithered = 3;
-		13: dithered = 3;
-		14: dithered = 3;
-		default: dithered = 3;
-	endcase
+	if (rgbdithered<1) begin
+		dithered=0;
+	end else if (rgbdithered>=17) begin
+		dithered=3;
+	end else begin
+		dithered=(rgbdithered-1)/4;
+	end
 end
 
 /* Clock domain crossing */
