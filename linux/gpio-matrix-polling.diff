@@ -1,0 +1,226 @@
+diff --git a/Documentation/devicetree/bindings/input/gpio-matrix-keypad.txt b/Documentation/devicetree/bindings/input/gpio-matrix-keypad.txt
+index 570dc10f0cd7..eb37f7f3f90f 100644
+--- a/Documentation/devicetree/bindings/input/gpio-matrix-keypad.txt
++++ b/Documentation/devicetree/bindings/input/gpio-matrix-keypad.txt
+@@ -17,6 +17,20 @@ Required Properties:
+ - linux,keymap:		The definition can be found at
+ 			bindings/input/matrix-keymap.txt
+ 
++The approach to enable all columns at the same time and to determine
++that a key press status change has occured from row pin level changes
++only works reliably for single key presses.  Multi key presses where the
++keys share their position on a row line may get deferred or even could
++go unnoticed, pressing and holding one key will shadow events which
++another key on the same row would have generated.  When reliable
++detection of key press events is required even in the presence of multi
++key presses, interrupt mode isn't sufficient any longer, and polling
++needs to be used.  The polling approach to detecting changes in the key
++press status will periodically activate a single column line and check
++the signals of the row lines.  Polling may also be applicable to setups
++where the hardware doesn't support the activation of several columns at
++the same time.
++
+ Optional Properties:
+ - linux,no-autorepeat:	do no enable autorepeat feature.
+ - wakeup-source:	use any event on keypad as wakeup event.
+@@ -47,3 +61,6 @@ Example:
+ 				0x0101001C
+ 				0x0201006C>;
+ 	};
++- col-switch-delay-ms:	columns switch interval in milliseconds instead
++			of using interrupts to detect key press changes,
++			enables polling mode when specified
+diff --git a/drivers/input/keyboard/matrix_keypad.c b/drivers/input/keyboard/matrix_keypad.c
+index 30924b57058f..9275d605bcd0 100644
+--- a/drivers/input/keyboard/matrix_keypad.c
++++ b/drivers/input/keyboard/matrix_keypad.c
+@@ -31,10 +31,12 @@ struct matrix_keypad {
+ 
+ 	uint32_t last_key_state[MATRIX_MAX_COLS];
+ 	struct delayed_work work;
++	struct delayed_work work_switch_column;
+ 	spinlock_t lock;
+ 	bool scan_pending;
+ 	bool stopped;
+ 	bool gpio_all_disabled;
++	unsigned int col_to_poll;
+ };
+ 
+ /*
+@@ -86,12 +88,17 @@ static void enable_row_irqs(struct matrix_keypad *keypad)
+ {
+ 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
+ 	int i;
++	unsigned long jiffies;
+ 
+-	if (pdata->clustered_irq > 0)
++	if (pdata->clustered_irq > 0) {
++		enable_irq(pdata->clustered_irq);
+ 		enable_irq(pdata->clustered_irq);
+-	else {
++	} else if (!pdata->col_switch_delay_ms) {
+ 		for (i = 0; i < pdata->num_row_gpios; i++)
+ 			enable_irq(gpio_to_irq(pdata->row_gpios[i]));
++	} else {
++		jiffies = msecs_to_jiffies(pdata->col_switch_delay_ms);
++		schedule_delayed_work(&keypad->work_switch_column, jiffies);
+ 	}
+ }
+ 
+@@ -100,11 +107,13 @@ static void disable_row_irqs(struct matrix_keypad *keypad)
+ 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
+ 	int i;
+ 
+-	if (pdata->clustered_irq > 0)
++	if (pdata->clustered_irq > 0) {
+ 		disable_irq_nosync(pdata->clustered_irq);
+-	else {
++	} else if (!pdata->col_switch_delay_ms) {
+ 		for (i = 0; i < pdata->num_row_gpios; i++)
+ 			disable_irq_nosync(gpio_to_irq(pdata->row_gpios[i]));
++	} else {
++		cancel_delayed_work(&keypad->work_switch_column);
+ 	}
+ }
+ 
+@@ -194,6 +203,64 @@ static irqreturn_t matrix_keypad_interrupt(int irq, void *id)
+ 	return IRQ_HANDLED;
+ }
+ 
++/*
++ * delayed work routine, periodically switching columns and checking the
++ * key press status, to detect changes without interrupt support
++ *
++ * this routine is the polling mode counterpart to the above interrupt handler
++ */
++static void matrix_keypad_switch(struct work_struct *work)
++{
++	struct matrix_keypad *keypad = container_of(work, struct matrix_keypad,
++						    work_switch_column.work);
++	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
++	int row, col;
++	uint32_t curr_state, prev_state;
++	unsigned long jiffies;
++
++	/* avoid multiple injection, and cope with shutdowns */
++	if (unlikely(keypad->scan_pending || keypad->stopped))
++		return;
++
++	/*
++	 * advance to the next column (avoids modulo calculation
++	 * since that might be too expensive in the absence of
++	 * compile time constants)
++	 */
++	keypad->col_to_poll++;
++	if (keypad->col_to_poll >= pdata->num_col_gpios)
++		keypad->col_to_poll = 0;
++	col = keypad->col_to_poll;
++
++	/*
++	 * sample the row status for this specific column, schedule
++	 * for the next column switch in the absence of changes
++	 */
++	activate_col(pdata, col, true);
++	curr_state = 0;
++	for (row = 0; row < pdata->num_row_gpios; row++)
++		curr_state |= row_asserted(pdata, row) ? (1 << row) : 0;
++	activate_col(pdata, col, false);
++
++
++	prev_state = keypad->last_key_state[col];
++	if (curr_state == prev_state) {
++		jiffies = msecs_to_jiffies(pdata->col_switch_delay_ms);
++		schedule_delayed_work(&keypad->work_switch_column, jiffies);
++		return;
++	}
++
++	/*
++	 * start the debounce interval when a change was detected,
++	 * cease further polling until the matrix scan has completed
++	 * (polling automatically gets re-started after the scan)
++	 */
++	disable_row_irqs(keypad);
++	keypad->scan_pending = true;
++	jiffies = msecs_to_jiffies(keypad->pdata->debounce_ms);
++	schedule_delayed_work(&keypad->work, jiffies);
++}
++
+ static int matrix_keypad_start(struct input_dev *dev)
+ {
+ 	struct matrix_keypad *keypad = input_get_drvdata(dev);
+@@ -216,6 +283,7 @@ static void matrix_keypad_stop(struct input_dev *dev)
+ 
+ 	spin_lock_irq(&keypad->lock);
+ 	keypad->stopped = true;
++	flush_work(&keypad->work_switch_column.work);
+ 	spin_unlock_irq(&keypad->lock);
+ 
+ 	flush_delayed_work(&keypad->work);
+@@ -227,6 +295,16 @@ static void matrix_keypad_stop(struct input_dev *dev)
+ }
+ 
+ #ifdef CONFIG_PM_SLEEP
++/*
++ * note that software polling may not mix well with interrupt driven
++ * wakeup from power management, since there is no concept of "enabling
++ * all columns at the same time", and any random column may be active
++ * when we get here
++ *
++ * an appropriate approach might be to have the user specify a column
++ * that shall get activated before sleep, such that a specific and
++ * well-known subset of the keypad matrix can wake up the device
++ */
+ static void matrix_keypad_enable_wakeup(struct matrix_keypad *keypad)
+ {
+ 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
+@@ -247,6 +325,8 @@ static void matrix_keypad_enable_wakeup(struct matrix_keypad *keypad)
+ 			}
+ 		}
+ 	}
++
++	/* TODO activate a potentially user specified column */
+ }
+ 
+ static void matrix_keypad_disable_wakeup(struct matrix_keypad *keypad)
+@@ -437,7 +517,9 @@ matrix_keypad_parse_dt(struct device *dev)
+ 
+ 	of_property_read_u32(np, "debounce-delay-ms", &pdata->debounce_ms);
+ 	of_property_read_u32(np, "col-scan-delay-us",
+-						&pdata->col_scan_delay_us);
++			     &pdata->col_scan_delay_us);
++	of_property_read_u32(np, "col-switch-delay-ms",
++			     &pdata->col_switch_delay_ms);
+ 
+ 	gpios = devm_kcalloc(dev,
+ 			     pdata->num_row_gpios + pdata->num_col_gpios,
+@@ -504,6 +586,8 @@ static int matrix_keypad_probe(struct platform_device *pdev)
+ 	keypad->input_dev = input_dev;
+ 	keypad->pdata = pdata;
+ 	keypad->row_shift = get_count_order(pdata->num_col_gpios);
++	INIT_DELAYED_WORK(&keypad->work_switch_column, matrix_keypad_switch);
++	keypad->col_to_poll = pdata->num_col_gpios;
+ 	keypad->stopped = true;
+ 	INIT_DELAYED_WORK(&keypad->work, matrix_keypad_scan);
+ 	spin_lock_init(&keypad->lock);
+diff --git a/include/linux/input/matrix_keypad.h b/include/linux/input/matrix_keypad.h
+index 9476768c3b90..1f8f07d1506f 100644
+--- a/include/linux/input/matrix_keypad.h
++++ b/include/linux/input/matrix_keypad.h
+@@ -41,6 +41,8 @@ struct matrix_keymap_data {
+  * @num_row_gpios: actual number of row gpios used by device
+  * @num_col_gpios: actual number of col gpios used by device
+  * @col_scan_delay_us: delay, measured in microseconds, that is
++ * @col_switch_delay_ms: delay in milliseconds, the interval with which
++ *	colums periodically get checked for changes in key press status
+  *	needed before we can keypad after activating column gpio
+  * @debounce_ms: debounce interval in milliseconds
+  * @clustered_irq: may be specified if interrupts of all row/column GPIOs
+@@ -69,7 +71,7 @@ struct matrix_keypad_platform_data {
+ 
+ 	/* key debounce interval in milli-second */
+ 	unsigned int	debounce_ms;
+-
++	unsigned int	col_switch_delay_ms;
+ 	unsigned int	clustered_irq;
+ 	unsigned int	clustered_irq_flags;
+ 
