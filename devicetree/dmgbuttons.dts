@@ -1,0 +1,46 @@
+/dts-v1/;
+	/plugin/;
+	/ {
+		compatible = "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709";
+		fragment@0 {
+			target-path = "/";
+			__overlay__ {
+				keypad: MATRIX5x3 {
+					compatible = "gpio-matrix-keypad";
+					debounce-delay-ms = <10>;
+					col-scan-delay-us = <10>;
+					col-switch-delay-ms = <20>;
+					// note: existence indicates activelow, not value
+					gpio-activelow = <1>; 
+					row-gpios = <&gpio 3 0	   // 1
+								 &gpio 4 0	   // 2
+								 &gpio 5 0	   // 3
+								 &gpio 6 0	   // 4
+								 &gpio 7 0>;   // 5
+
+					col-gpios = <&gpio 10 0	   // 6
+								 &gpio 11 0	   // 7
+								 &gpio 22 0>;  // 8
+					/*
+					  Keycodes from /usr/include/linux/input-event-codes.h
+					*/
+					 /* Packed: 0xRRCCKKKK */
+					linux,keymap = <
+							0x00000069 //KEY_LEFT
+							0x0100006c //KEY_DOWN
+							0x02000067 //KEY_UP
+							0x0300006a //KEY_RIGHT
+							0x04000001 //KEY_ESC
+							0x00010011 //KEY_W
+							0x0101001C //KEY_ENTER
+							0x02010036 //KEY_RIGHTSHIFT
+							0x0301002D //KEY_X
+							0x00020073 //KEY_VOLUMEUP
+							0x01020068 //KEY_PAGEUP
+							0x0202006d //KEY_PAGEDOWN
+							0x03020072 //KEY_VOLUMEDOWN
+							>;
+				 };
+			  };
+		   };
+	  };

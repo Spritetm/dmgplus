@@ -1,0 +1,29 @@
+/dts-v1/;
+/plugin/;
+
+/{
+	compatible = "brcm,bcm2708";
+
+	// There is no DPI driver module, but we need a platform device
+	// node (that doesn't already use pinctrl) to hang the pinctrl
+	// reference on - leds will do
+
+	fragment@0 {
+		target = <&leds>;
+		__overlay__ {
+			pinctrl-names = "default";
+			pinctrl-0 = <&dpidmg_pins>;
+		};
+	};
+
+	fragment@1 {
+		target = <&gpio>;
+		__overlay__ {
+			dpidmg_pins: dpidmg_pins {
+				brcm,pins = <0 1 2 8 9 16 17 23 24 25>; /* implies mode 6 and GRB: r76, g765, b76 */
+				brcm,function = <6>; /* alt2 */
+				brcm,pull = <0>; /* no pull */
+			};
+		};
+	};
+};
