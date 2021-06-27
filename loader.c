@@ -21,6 +21,7 @@
 #include "save.h"
 #include "sound.h"
 #include "sys.h"
+#include "dmgplus.h"
 
 static int mbc_table[256] =
 {
@@ -225,21 +226,18 @@ static byte *decompress(byte *data, int *len)
 
 int rom_load()
 {
-	FILE *f;
-	byte c, *data, *header;
-	int len = 0, rlen;
+	byte c, *data;
+	byte header[0x150];
+	int rlen;
 
-	if (strcmp(romfile, "-")) f = fopen(romfile, "rb");
-	else f = stdin;
-	if (!f) die("cannot open rom file: %s\n", romfile);
-
-	data = loadfile(f, &len);
-	header = data = decompress(data, &len);
+	dmgplus_init();
+	dmgplus_cart_read(0, header, 0x150);
 	
 	memcpy(rom.name, header+0x0134, 16);
 	if (rom.name[14] & 0x80) rom.name[14] = 0;
 	if (rom.name[15] & 0x80) rom.name[15] = 0;
 	rom.name[16] = 0;
+	printf("Cartridge: %s\n", rom.name);
 
 	c = header[0x0147];
 	mbc.type = mbc_table[c];
@@ -252,11 +250,9 @@ int rom_load()
 	if (!mbc.ramsize) die("unknown SRAM size %02X\n", header[0x0149]);
 
 	rlen = 16384 * mbc.romsize;
-	rom.bank = realloc(data, rlen);
-	if (rlen > len) memset(rom.bank[0]+len, 0xff, rlen - len);
+	rom.region = calloc(mbc.romsize*4, sizeof(byte*)); //4 regions per mbc bank
 	
 	ram.sbank = malloc(8192 * mbc.ramsize);
-
 	initmem(ram.sbank, 8192 * mbc.ramsize);
 	initmem(ram.ibank, 4096 * 8);
 
@@ -266,8 +262,6 @@ int rom_load()
 	c = header[0x0143];
 	hw.cgb = ((c == 0x80) || (c == 0xc0)) && !forcedmg;
 	hw.gba = (hw.cgb && gbamode);
-
-	if (strcmp(romfile, "-")) fclose(f);
 
 	return 0;
 }
@@ -373,10 +367,10 @@ void loader_unload()
 	if (romfile) free(romfile);
 	if (sramfile) free(sramfile);
 	if (saveprefix) free(saveprefix);
-	if (rom.bank) free(rom.bank);
+	if (rom.region) free(rom.region); //ToDo: free regions themselves as well
 	if (ram.sbank) free(ram.sbank);
 	romfile = sramfile = saveprefix = 0;
-	rom.bank = 0;
+	rom.region = 0;
 	ram.sbank = 0;
 	mbc.type = mbc.romsize = mbc.ramsize = mbc.batt = 0;
 }

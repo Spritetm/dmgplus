@@ -10,6 +10,8 @@
 #include "lcd.h"
 #include "lcdc.h"
 #include "sound.h"
+#include "dmgplus.h"
+#include "fastmem.h"
 
 struct mbc mbc;
 struct rom rom;
@@ -34,18 +36,18 @@ void mem_updatemap()
 	byte **map;
 	
 	map = mbc.rmap;
-	map[0x0] = rom.bank[0];
-	map[0x1] = rom.bank[0];
-	map[0x2] = rom.bank[0];
-	map[0x3] = rom.bank[0];
+	for (int i=0; i<8; i++) map[i]=NULL;
+	if (rom.region[0]) map[0x0] = rom.region[0];
+	if (rom.region[1]) map[0x1] = rom.region[1] - 0x1000;
+	if (rom.region[2]) map[0x2] = rom.region[2] - 0x2000;
+	if (rom.region[3]) map[0x3] = rom.region[3] - 0x3000;
 	if (mbc.rombank < mbc.romsize)
 	{
-		map[0x4] = rom.bank[mbc.rombank] - 0x4000;
-		map[0x5] = rom.bank[mbc.rombank] - 0x4000;
-		map[0x6] = rom.bank[mbc.rombank] - 0x4000;
-		map[0x7] = rom.bank[mbc.rombank] - 0x4000;
+		if (rom.region[mbc.rombank*4]) map[0x4] = rom.region[mbc.rombank*4] - 0x4000;
+		if (rom.region[mbc.rombank*4+1]) map[0x5] = rom.region[mbc.rombank*4+1] - 0x5000;
+		if (rom.region[mbc.rombank*4+2]) map[0x6] = rom.region[mbc.rombank*4+2] - 0x6000;
+		if (rom.region[mbc.rombank*4+3]) map[0x7] = rom.region[mbc.rombank*4+3] - 0x7000;
 	}
-	else map[0x4] = map[0x5] = map[0x6] = map[0x7] = NULL;
 	if (0 && (R_STAT & 0x03) == 0x03)
 	{
 		map[0x8] = NULL;
@@ -507,6 +509,26 @@ void mem_write(int a, byte b)
 }
 
 
+void do_test() {
+	return;
+	byte dump[64*1024];
+	for (int i=0; i<0x4000; i++) {
+		dump[i]=readb(i);
+	}
+	for (int bank=1; bank<4; bank++) {
+		mbc.rombank=bank;
+		mem_updatemap();
+		for (int i=0x3fff; i>=0; i--) {
+			dump[i+bank*0x4000]=readb(i+0x4000);
+		}
+	}
+	FILE *f=fopen("dump.bin", "wb");
+	fwrite(dump, sizeof(dump), 1, f);
+	fclose(f);
+	printf("Dunmped.\n");
+	exit(1);
+}
+
 /*
  * mem_read is the basic read function...not useful for much anymore
  * with the read map, but it's still necessary for the final messy
@@ -516,6 +538,28 @@ void mem_write(int a, byte b)
 byte mem_read(int a)
 {
 	int n;
+	if (a<0x8000) {
+		//rom region, 4K region isn't read from cart yet. We need to load it.
+		if (a<0x4000) {
+			rom.region[a>>12]=malloc(0x1000);
+			dmgplus_cart_read(a&0x3000, rom.region[a>>12], 0x1000);
+			printf("Read region %x (addr %x) from cart.\n", a>>12, a);
+			mem_updatemap();
+		} else {
+			int region=((a-0x4000)>>12);
+			region+=mbc.rombank*4;
+			if (rom.region[region]) {
+				printf("Huh? Region is already allocated.\n");
+			}
+			rom.region[region]=malloc(0x1000);
+			byte r=mbc.rombank;
+			dmgplus_cart_write(0x2000, &r, 1); //set mbc to correct bank
+			dmgplus_cart_read(a&0x7000, rom.region[region], 0x1000);
+			printf("Read region %x (addr %x, mbc bank %x) from cart.\n", region, a, mbc.rombank);
+			mem_updatemap();
+		}
+	}
+
 	byte ha = (a>>12) & 0xE;
 	
 	/* printf("read %04x\n", a); */
@@ -523,10 +567,11 @@ byte mem_read(int a)
 	{
 	case 0x0:
 	case 0x2:
-		return rom.bank[0][a];
+		for (int i=0x100; i<0x119; i++) printf("%02x ", rom.region[0][i]);
+		return rom.region[a>>12][a&0xfff];
 	case 0x4:
 	case 0x6:
-		return rom.bank[mbc.rombank][a & 0x3FFF];
+		return rom.region[((a-0x4000)>>12)+mbc.rombank*4][a&0xfff];
 	case 0x8:
 		/* if ((R_STAT & 0x03) == 0x03) return 0xFF; */
 		return lcd.vbank[R_VBK&1][a & 0x1FFF];
@@ -568,6 +613,7 @@ void mbc_reset()
 	mbc.rambank = 0;
 	mbc.enableram = 0;
 	mem_updatemap();
+	do_test();
 }
 
 

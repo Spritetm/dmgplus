@@ -31,7 +31,7 @@ struct mbc
 
 struct rom
 {
-	byte (*bank)[16384];
+	byte **region; //4K regions
 	char name[20];
 };
 

@@ -5,7 +5,7 @@
 
 #include "defs.h"
 #include "mem.h"
-
+#include <stdio.h>
 
 static byte readb(int a)
 {
@@ -23,51 +23,13 @@ static void writeb(int a, byte b)
 
 static int readw(int a)
 {
-	if ((a+1) & 0xfff)
-	{
-		byte *p = mbc.rmap[a>>12];
-		if (p)
-		{
-#ifdef IS_LITTLE_ENDIAN
-#ifndef ALLOW_UNALIGNED_IO
-			if (a&1) return p[a] | (p[a+1]<<8);
-#endif
-			return *(word *)(p+a);
-#else
-			return p[a] | (p[a+1]<<8);
-#endif
-		}
-	}
-	return mem_read(a) | (mem_read(a+1)<<8);
+	return readb(a) | (readb(a+1)<<8);
 }
 
 static void writew(int a, int w)
 {
-	if ((a+1) & 0xfff)
-	{
-		byte *p = mbc.wmap[a>>12];
-		if (p)
-		{
-#ifdef IS_LITTLE_ENDIAN
-#ifndef ALLOW_UNALIGNED_IO
-			if (a&1)
-			{
-				p[a] = w;
-				p[a+1] = w >> 8;
-				return;
-			}
-#endif
-			*(word *)(p+a) = w;
-			return;
-#else
-			p[a] = w;
-			p[a+1] = w >> 8;
-			return;
-#endif
-		}
-	}
-	mem_write(a, w);
-	mem_write(a+1, w>>8);
+	writeb(a, w);
+	writeb(a+1, w>>8);
 }
 
 static byte readhi(int a)
