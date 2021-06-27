@@ -5,6 +5,16 @@
 //delay value indicating how many cycles to wait before raising the splash_done
 //line. (This gets raised immediately for a non-dmg+ cart.)
 
+/*
+ * ----------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * Jeroen Domburg <jeroen@spritesmods.com> wrote this file. As long as you retain 
+ * this notice you can do whatever you want with this stuff. If we meet some day, 
+ * and you think this stuff is worth it, you can buy me a beer in return. 
+ * ----------------------------------------------------------------------------
+ */
+
+
 module dmgplus_splash_gen (
 	input wire clk_8m,
 	input wire rst,
