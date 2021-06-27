@@ -1,0 +1,12 @@
+(sym_lib_table
+  (lib (name dmgplus_components)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/dmgplus_components.lib)(options "")(descr ""))
+  (lib (name ice40hx8k)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/ice40hx8k.lib)(options "")(descr ""))
+  (lib (name ice40hx4k)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/ice40hx4k.lib)(options "")(descr ""))
+  (lib (name gb_pak)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/gb_pak.lib)(options "")(descr ""))
+  (lib (name gb_lcdflat)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/gb_lcdflat.lib)(options "")(descr ""))
+  (lib (name 74lvc4245)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/74lvc4245.lib)(options "")(descr ""))
+  (lib (name xc6206)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/xc6206.lib)(options "")(descr ""))
+  (lib (name ns8002)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/ns8002.lib)(options "")(descr ""))
+  (lib (name mcp6021)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/mcp6021.lib)(options "")(descr ""))
+  (lib (name alps_sllb120x00)(type Legacy)(uri /home/jeroen/pcb/dmgplus/dmgplus/alps_sllb120x00.lib)(options "")(descr ""))
+)

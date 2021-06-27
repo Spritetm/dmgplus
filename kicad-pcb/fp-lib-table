@@ -1,0 +1,5 @@
+(fp_lib_table
+  (lib (name dmg_footprints)(type KiCad)(uri ${KIPRJMOD}/dmg_footprints.pretty)(options "")(descr ""))
+  (lib (name alps_lever_and_push)(type KiCad)(uri ${KIPRJMOD}/alps_lever_and_push.pretty)(options "")(descr ""))
+  (lib (name raspi_zero)(type KiCad)(uri ${KIPRJMOD}/raspi_zero.pretty)(options "")(descr ""))
+)
